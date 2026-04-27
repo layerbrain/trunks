@@ -1,0 +1,48 @@
+[project]
+name = "trunks"
+version = "0.1.0"
+description = "Git-compatible repositories backed by your own storage: S3, R2, Tigris, MinIO, Postgres, SFTP, local disk, NFS."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Brain", email = "brain@layerbrain.com" }]
+keywords = ["git", "storage", "s3", "r2", "tigris", "sandbox", "agents"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: System :: Archiving :: Backup",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://layerbrain.com/trunks"
+Source = "https://github.com/layerbrain/trunks"
+Issues = "https://github.com/layerbrain/trunks/issues"
+
+[project.optional-dependencies]
+s3 = ["httpx"]
+azure = ["azure-storage-blob"]
+gcs = ["google-cloud-storage"]
+sftp = ["asyncssh"]
+postgres = ["asyncpg"]
+testing = ["testcontainers"]
+
+[project.scripts]
+trunks = "trunks.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["trunks"]
+
+[tool.hatch.build.targets.sdist]
+include = ["trunks", "README.md", "docs/media/*.svg"]

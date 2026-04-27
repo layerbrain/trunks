@@ -1,0 +1,92 @@
+<svg width="100%" viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M 0 0 L 10 5 L 0 10 z" fill="#171717"/>
+</marker>
+</defs>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;fill:#171717}
+.h{font-size:13px;font-weight:600}
+.s{font-size:10px;opacity:0.6}
+.n{font-size:11px;font-weight:600}
+.m{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;opacity:0.7}
+.tag{font-size:9px;opacity:0.5;letter-spacing:0.06em}
+</style>
+
+<rect x="0" y="0" width="720" height="280" fill="#fafafa"/>
+<rect x="8" y="8" width="704" height="264" fill="white" stroke="#e5e5e5" stroke-width="1" rx="6"/>
+
+<g>
+<line x1="500" y1="20" x2="525" y2="20" stroke="#171717" stroke-width="1.2"/>
+<text class="s" x="532" y="24">always-on</text>
+<line x1="600" y1="20" x2="625" y2="20" stroke="#171717" stroke-width="1.2" stroke-dasharray="5 3"/>
+<text class="s" x="632" y="24">optional</text>
+</g>
+
+<text class="h" x="180" y="62">Git stream</text>
+<text class="s" x="180" y="76">still works like git — push, pull, branches, PRs</text>
+
+<g stroke="#171717" stroke-width="0.8" stroke-opacity="0.2">
+<line x1="180" y1="110" x2="690" y2="110"/>
+</g>
+
+<g>
+<rect x="180" y="90" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1" stroke-dasharray="5 3"/>
+<text class="n" x="190" y="108">GitHub</text>
+<text class="m" x="190" y="122">PRs · reviews</text>
+
+<rect x="340" y="90" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1" stroke-dasharray="5 3"/>
+<text class="n" x="350" y="108">CI / Actions</text>
+<text class="m" x="350" y="122">tests · deploys</text>
+
+<rect x="500" y="90" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1" stroke-dasharray="5 3"/>
+<text class="n" x="510" y="108">Teammates</text>
+<text class="m" x="510" y="122">git pull</text>
+</g>
+
+<g stroke="#171717" stroke-width="1" fill="none" stroke-dasharray="5 3">
+<line x1="300" y1="110" x2="336" y2="110" marker-end="url(#arr)"/>
+<line x1="460" y1="110" x2="496" y2="110" marker-end="url(#arr)"/>
+</g>
+
+<text class="h" x="180" y="172">Trunks stream</text>
+<text class="s" x="180" y="186">writes go to your storage; GitHub can mirror</text>
+
+<g stroke="#171717" stroke-width="0.8" stroke-opacity="0.2">
+<line x1="180" y1="220" x2="690" y2="220"/>
+</g>
+
+<g>
+<rect x="180" y="200" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="190" y="218">Trunks shim</text>
+<text class="m" x="190" y="232">picks up the push</text>
+
+<rect x="340" y="200" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="350" y="218">Your storage</text>
+<text class="m" x="350" y="232">S3 · SFTP · Postgres</text>
+
+<rect x="500" y="200" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="510" y="218">Agents</text>
+<text class="m" x="510" y="232">trunks pull</text>
+</g>
+
+<g stroke="#171717" stroke-width="1" fill="none">
+<line x1="300" y1="220" x2="336" y2="220" marker-end="url(#arr)"/>
+<line x1="460" y1="220" x2="496" y2="220" marker-end="url(#arr)"/>
+</g>
+
+<g>
+<rect x="30" y="145" width="100" height="40" rx="4" fill="#fafafa" stroke="#171717" stroke-width="1.4"/>
+<text class="n" x="42" y="163">git push</text>
+<text class="m" x="42" y="177">one command</text>
+</g>
+
+<g stroke="#171717" stroke-width="1" fill="none" stroke-dasharray="5 3">
+<line x1="130" y1="155" x2="176" y2="110" marker-end="url(#arr)"/>
+</g>
+<g stroke="#171717" stroke-width="1" fill="none">
+<line x1="130" y1="175" x2="176" y2="220" marker-end="url(#arr)"/>
+</g>
+
+<text class="s" x="80" y="206" text-anchor="middle">forks both rails</text>
+</svg>

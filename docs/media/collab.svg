@@ -1,0 +1,80 @@
+<svg width="100%" viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M 0 0 L 10 5 L 0 10 z" fill="#171717"/>
+</marker>
+</defs>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;fill:#171717}
+.h{font-size:13px;font-weight:600}
+.s{font-size:10px;opacity:0.6}
+.n{font-size:11px;font-weight:600}
+.m{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;opacity:0.7}
+.tag{font-size:9px;opacity:0.5;letter-spacing:0.06em}
+</style>
+
+<rect x="0" y="0" width="720" height="320" fill="#fafafa"/>
+<rect x="8" y="8" width="704" height="304" fill="white" stroke="#e5e5e5" stroke-width="1" rx="6"/>
+
+<text class="tag" x="40" y="32">SANDBOX-TO-SANDBOX REPLICATION</text>
+<text class="h" x="40" y="50">1,000s of agents, each in its own sandbox, syncing in real-time</text>
+
+<g>
+<rect x="40" y="80" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="52" y="98">Sandbox · Alice</text>
+<g fill="#171717"><circle cx="170" cy="98" r="2.4"/><circle cx="184" cy="98" r="2.4"/><circle cx="198" cy="98" r="2.4"/><circle cx="212" cy="98" r="2.4"/></g>
+<text class="m" x="52" y="110">isolated worktree · own branch</text>
+
+<rect x="40" y="124" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="52" y="142">Sandbox · Bob</text>
+<g fill="#171717"><circle cx="184" cy="142" r="2.4"/><circle cx="198" cy="142" r="2.4"/><circle cx="212" cy="142" r="2.4"/></g>
+<text class="m" x="52" y="154">isolated worktree · own branch</text>
+
+<rect x="40" y="168" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="52" y="186">Sandbox · Agent 1</text>
+<g fill="#171717"><circle cx="156" cy="186" r="2.4"/><circle cx="170" cy="186" r="2.4"/><circle cx="184" cy="186" r="2.4"/><circle cx="198" cy="186" r="2.4"/><circle cx="212" cy="186" r="2.4"/></g>
+<text class="m" x="52" y="198">isolated worktree · own branch</text>
+
+<rect x="40" y="212" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
+<text class="n" x="52" y="230">Sandbox · Agent 2</text>
+<g fill="#171717"><circle cx="198" cy="230" r="2.4"/><circle cx="212" cy="230" r="2.4"/></g>
+<text class="m" x="52" y="242">isolated worktree · own branch</text>
+
+<rect x="40" y="256" width="200" height="28" rx="4" fill="#fafafa" stroke="#171717" stroke-width="1" stroke-dasharray="4 3"/>
+<text class="n" x="52" y="274">+ 1,000s more sandboxes</text>
+</g>
+
+<g stroke="#171717" stroke-width="1" fill="none">
+<line x1="241" y1="96" x2="378" y2="129" marker-end="url(#arr)"/>
+<line x1="241" y1="140" x2="378" y2="145" marker-end="url(#arr)"/>
+<line x1="241" y1="184" x2="378" y2="161" marker-end="url(#arr)"/>
+<line x1="241" y1="228" x2="378" y2="177" marker-end="url(#arr)"/>
+<line x1="241" y1="268" x2="378" y2="193" marker-end="url(#arr)"/>
+</g>
+<g stroke="#171717" stroke-width="1" fill="none" stroke-dasharray="3 3" opacity="0.55">
+<line x1="378" y1="135" x2="241" y2="100" marker-end="url(#arr)"/>
+<line x1="378" y1="151" x2="241" y2="144" marker-end="url(#arr)"/>
+<line x1="378" y1="167" x2="241" y2="188" marker-end="url(#arr)"/>
+<line x1="378" y1="183" x2="241" y2="232" marker-end="url(#arr)"/>
+<line x1="378" y1="199" x2="241" y2="272" marker-end="url(#arr)"/>
+</g>
+<line x1="500" y1="30" x2="525" y2="30" stroke="#171717" stroke-width="1.2"/>
+<text class="s" x="532" y="34">push</text>
+<line x1="580" y1="30" x2="605" y2="30" stroke="#171717" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.55"/>
+<text class="s" x="612" y="34">pull</text>
+
+<rect x="380" y="120" width="200" height="80" rx="6" fill="#fafafa" stroke="#171717" stroke-width="1.4"/>
+<text class="n" x="394" y="142">Trunks</text>
+<text class="m" x="394" y="158">shared backend · replicates</text>
+<text class="m" x="394" y="174">SFTP · S3 · Postgres</text>
+<text class="s" x="394" y="190">writes flow in, state flows back out</text>
+
+<g stroke="#171717" stroke-width="1" fill="none">
+<line x1="580" y1="160" x2="640" y2="160" marker-end="url(#arr)"/>
+</g>
+<rect x="640" y="140" width="60" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1.4"/>
+<text class="n" x="652" y="158">main</text>
+<text class="m" x="652" y="172">gated</text>
+
+<text class="s" x="40" y="306">every push lands · every pull sees the latest · the only gate is the merge into main</text>
+</svg>
