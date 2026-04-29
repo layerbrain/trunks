@@ -4,7 +4,7 @@
 pip install trunks
 ```
 
-Use the Python SDK from scripts, services, notebooks, or agent runtimes.
+Use the Python SDK from scripts, services, notebooks, or services.
 
 ## Files
 
@@ -14,7 +14,7 @@ from trunks import Trunk
 with Trunk(name="my-app") as trunk:
     trunk.pull()
     trunk.write("task.md", b"Fix auth\n")
-    trunk.commit(message="agent output")
+    trunk.commit(message="update auth")
     trunk.push()
 ```
 
@@ -24,7 +24,7 @@ Event-loop runtimes use the same object with `await`:
 async with Trunk(name="my-app") as trunk:
     await trunk.pull()
     await trunk.write("task.md", b"Fix auth\n")
-    await trunk.commit(message="agent output")
+    await trunk.commit(message="update auth")
     await trunk.push()
 ```
 
@@ -48,7 +48,7 @@ These methods are available in regular scripts and event-loop runtimes.
 ## Versioning
 
 ```python
-trunk.commit(message="agent output")
+trunk.commit(message="update auth")
 trunk.log()                 # iterate commits, newest first
 trunk.status()              # what's pending vs HEAD
 trunk.push()
@@ -67,7 +67,7 @@ client = Trunks(cwd="./my-app")
 
 repos = client.repos.list(limit=20, offset=0)
 branches = client.branches.list(limit=20, offset=0)
-branch = client.branches.create(name="agent/run-7", from_ref="main")
+branch = client.branches.create(name="feature/auth", from_ref="main")
 events = client.audit.list(limit=10, offset=0)
 ```
 

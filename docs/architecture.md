@@ -36,7 +36,7 @@ s3://company-trunks/trunks/my-app.trunk/
 ├── refs/
 │   └── heads/
 │       ├── main         ← contains commit sha
-│       └── agent/run-7
+│       └── feature/auth
 └── journals/
     └── 2024-09-...      ← append-only durability records
 ```
@@ -71,7 +71,7 @@ A commit points to one tree (the file system) and zero or more parent commits. T
 trunks mount --repo my-app --path ./my-app
 ```
 
-Default mount writes the working tree to plain files on disk. Agents use `cat`, `vim`, `npm`, `python`.
+Default mount writes the working tree to plain files on disk. Tools use `cat`, `vim`, `npm`, `python`.
 
 ```bash
 trunks mount --repo big-repo --path ./big-repo --mode virtual
@@ -97,7 +97,7 @@ Virtual mount starts a local filesystem daemon. The folder behaves like a real f
 ```bash
 cd ./my-app
 trunks
-git commit -m "agent output"
+git commit -m "update auth"
 git push
 ```
 
@@ -108,7 +108,7 @@ You can read the repo with `git log`, diff with `git diff`, or never touch Git.
 ## Concurrency
 
 ```text
-   agent A                              agent B
+   writer A                              writer B
       │                                    │
       │ commit + push                      │ commit + push
       ▼                                    ▼
@@ -129,7 +129,7 @@ You can read the repo with `git log`, diff with `git diff`, or never touch Git.
 
 Objects are immutable, so any number of writers can upload blobs simultaneously without conflict. Refs are guarded by compare-and-swap. Two writers on the same branch race. One wins. The other gets a clean failure and retries.
 
-Two agents on different branches never race at all.
+Two writers on different branches never race at all.
 
 ## Cache
 

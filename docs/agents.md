@@ -38,7 +38,7 @@ cd ./my-app
 trunks pull
 echo "Fix auth" > task.md
 trunks diff --vs main
-trunks checkpoint -m "agent output"
+trunks checkpoint -m "update auth"
 trunks push
 ```
 
@@ -56,7 +56,7 @@ const fs = await new Trunks().mount({
 
 await fs.pull();
 await fs.write("task.md", "Fix auth\n");
-await fs.checkpoint("agent output");
+await fs.checkpoint("update auth");
 await fs.push();
 ```
 

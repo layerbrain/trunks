@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 license = "MIT"
 dynamic = ["version"]
 authors = [{ name = "Brain", email = "brain@layerbrain.com" }]
-keywords = ["git", "storage", "s3", "r2", "tigris", "sandbox", "agents"]
+keywords = ["git", "storage", "s3", "r2", "tigris", "filesystem", "version-control"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

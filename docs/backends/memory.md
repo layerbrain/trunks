@@ -11,4 +11,4 @@ with Trunk(backend="memory://") as trunk:
     print(commit.id)
 ```
 
-The data disappears when the process exits. Do not use it for durable agent work.
+The data disappears when the process exits. Do not use it for durable work.

@@ -5,7 +5,7 @@ pip install trunks
 npm install @layerbrain/trunks
 ```
 
-The Node SDK gives JavaScript and TypeScript agents the same file, versioning, and resource APIs as the CLI.
+The Node SDK gives JavaScript and TypeScript applications the same file, versioning, and resource APIs as the CLI.
 
 ## Files
 
@@ -18,7 +18,7 @@ const fs = await trunks.mount({ repo: "my-app", path: "./my-app", watch: true })
 await fs.pull();
 await fs.write("task.md", "Fix auth\n");
 console.log((await fs.read("task.md")).toString());
-await fs.checkpoint("agent output");
+await fs.checkpoint("update auth");
 await fs.push();
 ```
 
@@ -38,7 +38,7 @@ await fs.remove("archive/b.txt");
 ## Versioning
 
 ```ts
-await fs.checkpoint("agent output");
+await fs.checkpoint("update auth");
 await fs.log();
 await fs.status();
 await fs.push();
@@ -50,7 +50,7 @@ await fs.fetch();
 
 ```ts
 const branches = await trunks.branches.list({ limit: 20, offset: 0 });
-await trunks.branches.create({ name: "agent/run-7", from: "main" });
+await trunks.branches.create({ name: "feature/auth", from: "main" });
 ```
 
 See [Resources](resources.md) for the full surface.
@@ -63,4 +63,4 @@ const result = await shell.exec("grep -R auth .");
 console.log(result.stdout);
 ```
 
-`localShell()` runs on the machine where the Node process runs. For untrusted agent work, run the Node process inside the sandbox or execute shell commands through the sandbox provider.
+`localShell()` runs on the machine where the Node process runs. For untrusted code, run the Node process inside the sandbox or execute shell commands through the sandbox provider.

@@ -66,7 +66,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;fil
 <text class="m" x="350" y="232">S3 · SFTP · Postgres</text>
 
 <rect x="500" y="200" width="120" height="40" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
-<text class="n" x="510" y="218">Agents</text>
+<text class="n" x="510" y="218">Writers</text>
 <text class="m" x="510" y="232">trunks pull</text>
 </g>
 

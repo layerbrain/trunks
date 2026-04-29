@@ -8,7 +8,7 @@ Five minutes from zero to a synced repo.
 pip install trunks
 ```
 
-That ships the CLI. Add the Node package only if your agent runs in Node:
+That ships the CLI. Add the Node package when your application runs in Node:
 
 ```bash
 npm install @layerbrain/trunks
@@ -61,11 +61,11 @@ grep -R "login" src || true
 ## 4. Save A Version
 
 ```bash
-trunks checkpoint -m "agent output"
+trunks checkpoint -m "update auth"
 trunks push
 ```
 
-`checkpoint` writes a Git commit object. `push` syncs objects and refs to your backend. The two split exists because agents make a lot of small edits. Checkpoint locally as often as you want. Push when you're ready.
+`checkpoint` writes a Git commit object. `push` syncs objects and refs to your backend. The two split exists because workloads can make a lot of small edits. Checkpoint locally as often as you want. Push when you're ready.
 
 ## 5. Continue Somewhere Else
 
@@ -82,9 +82,9 @@ Same repo name. Same storage root. Same files, including the version you pushed.
 ```bash
 cd ./my-app
 trunks
-git checkout -b agent/run-7
+git checkout -b feature/auth
 git add .
-git commit -m "agent output"
+git commit -m "update auth"
 git push
 ```
 
@@ -95,4 +95,4 @@ git push
 - [Lifecycle](lifecycle.md): what each command does to bytes
 - [CLI reference](cli.md): every flag
 - [Backends](backends/README.md): pick the right storage
-- [Agents](agents.md): wire it up to a framework
+- [Agents](agents.md): use Trunks with agent frameworks

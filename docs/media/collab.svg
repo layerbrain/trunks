@@ -17,7 +17,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;fil
 <rect x="8" y="8" width="704" height="304" fill="white" stroke="#e5e5e5" stroke-width="1" rx="6"/>
 
 <text class="tag" x="40" y="32">SANDBOX-TO-SANDBOX REPLICATION</text>
-<text class="h" x="40" y="50">1,000s of agents, each in its own sandbox, syncing in real-time</text>
+<text class="h" x="40" y="50">1,000s of writers, each in its own workspace, syncing through storage</text>
 
 <g>
 <rect x="40" y="80" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
@@ -31,12 +31,12 @@ text{font-family:-apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;fil
 <text class="m" x="52" y="154">isolated worktree · own branch</text>
 
 <rect x="40" y="168" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
-<text class="n" x="52" y="186">Sandbox · Agent 1</text>
+<text class="n" x="52" y="186">Workspace · Writer 1</text>
 <g fill="#171717"><circle cx="156" cy="186" r="2.4"/><circle cx="170" cy="186" r="2.4"/><circle cx="184" cy="186" r="2.4"/><circle cx="198" cy="186" r="2.4"/><circle cx="212" cy="186" r="2.4"/></g>
 <text class="m" x="52" y="198">isolated worktree · own branch</text>
 
 <rect x="40" y="212" width="200" height="36" rx="4" fill="white" stroke="#171717" stroke-width="1"/>
-<text class="n" x="52" y="230">Sandbox · Agent 2</text>
+<text class="n" x="52" y="230">Workspace · Writer 2</text>
 <g fill="#171717"><circle cx="198" cy="230" r="2.4"/><circle cx="212" cy="230" r="2.4"/></g>
 <text class="m" x="52" y="242">isolated worktree · own branch</text>
 

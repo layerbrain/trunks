@@ -28,7 +28,7 @@ S3-compatible covers AWS S3, R2, Tigris, MinIO, B2, Wasabi, Spaces, Ceph, NetApp
 
 | Use case | Backend |
 |---|---|
-| Production agent swarms | S3-compatible storage or Postgres |
+| Production concurrent workloads | S3-compatible storage or Postgres |
 | Self-hosted object storage | MinIO |
 | Strong transactional refs | Postgres |
 | Local development | `local:///tmp/trunks-store` |

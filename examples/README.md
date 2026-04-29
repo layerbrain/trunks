@@ -11,7 +11,7 @@ Each example exposes the same Trunks tools:
 - `checkpoint`
 - `push`
 
-## Agent Frameworks
+## Agent Framework Examples
 
 | Framework | Directory |
 |---|---|

@@ -24,4 +24,4 @@ smb:///mnt/smb
 
 The OS handles filesystem credentials and mount permissions.
 
-For high-concurrency agent swarms, prefer S3-compatible storage or Postgres.
+For high-concurrency workloads, prefer S3-compatible storage or Postgres.

@@ -1,15 +1,15 @@
 # Trunks
 
-The most powerful open-source POSIX-compatible, Git-native filesystem for AI agents.
+The most powerful open-source POSIX-compatible, Git-native filesystem.
 
-**Trunks turns any backend into a Git-compatible remote.** Point it at S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, a fileshare, or local disk. You get branches, commits, refs, push, pull, the whole protocol. No Git server. No service to operate. No control plane. No repo copy per agent.
+**Trunks turns any backend into a Git-compatible remote.** Point it at S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, a fileshare, or local disk. You get branches, commits, refs, push, pull, the whole protocol. No Git server. No service to operate. No control plane. No repo copy per workspace.
 
-Agents write normal files. Developers run normal Git.
+Applications write normal files. Developers run normal Git.
 
 ```bash
-git checkout -b agent/run-7
+git checkout -b feature/auth
 git add .
-git commit -m "agent output"
+git commit -m "update auth"
 git push
 ```
 
@@ -28,7 +28,7 @@ npm install @layerbrain/trunks
 trunks mount --repo my-app --backend s3://company-trunks --path ./my-app
 ```
 
-That's it. `./my-app` is a normal folder now. Run your agent in it. Edit code in it. `trunks push` syncs to your bucket. Another machine runs the same `mount` and sees the same files.
+That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. `trunks push` syncs to your bucket. Another machine runs the same `mount` and sees the same files.
 
 S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
 
@@ -43,7 +43,7 @@ s3://company-trunks/trunks/my-app.trunk/
 └── journals/      crash recovery
 ```
 
-- When an agent writes a file, Trunks hashes the bytes into objects.
+- When a process writes a file, Trunks hashes the bytes into objects.
 - When it checkpoints, Trunks writes a tree and a commit.
 - When it pushes, Trunks advances the branch ref with compare-and-swap.
 
@@ -51,15 +51,15 @@ That's the whole protocol. Two writers can't clobber each other. Crashes don't c
 
 ## Why It Exists
 
-Agents make a lot of files. Without history, every run is a coin flip. Did the agent leave you something useful, or did it stomp the last version?
+Modern software moves a lot of files across laptops, CI, sandboxes, servers, and storage buckets. Without version history, every write is just another blob that can overwrite the last one.
 
 Git solves history. But Git expects a hosted server, a clone per worker, and has no native story for large or many repos.
 
-Trunks keeps Git's commit objects and refs, drops the server, and writes straight to storage you already use. The bucket is the remote. So is the database, or the SFTP host. Agents check out a branch, write files, save versions, and you review the diff like a normal pull request.
+Trunks keeps Git's commit objects and refs, drops the server, and writes straight to storage you already use. The bucket is the remote. So is the database, or the SFTP host. Work happens on branches, files are saved as commits, and diffs stay reviewable like any normal Git workflow.
 
 ## What You Get
 
-- **Real files.** Agents read and write with `cat`, `vim`, `grep`, `npm`, `python`. The SDKs are a convenience, not a requirement.
+- **Real files.** Tools read and write with `cat`, `vim`, `grep`, `npm`, `python`. The SDKs are a convenience, not a requirement.
 - **Real Git.** Every checkpoint is a Git commit object. `git log`, `git diff`, `git blame` all work. So does `git push` through the Trunks shim.
 - **Real concurrency.** Branches are pointers. Different branches never collide. Same branch is one CAS. One writer wins, the others retry.
 - **Real backends.** S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, fileshare, local disk. Each one passes the same multi-commit, branch, merge, and CAS-conflict contract test.
@@ -78,25 +78,25 @@ Default is plain files. `--watch` keeps a journal so a crash doesn't lose work. 
 
 ## Branches Are Pointers
 
-One branch per agent run. Creating one is a single ref write. No copy.
+One branch per task. Creating one is a single ref write. No copy.
 
 ```bash
-trunks branch create --name agent/run-7 --from main
-trunks branch switch --name agent/run-7
-trunks checkpoint -m "agent output"
+trunks branch create --name feature/auth --from main
+trunks branch switch --name feature/auth
+trunks checkpoint -m "update auth"
 trunks push
 ```
 
-Two agents on different branches don't collide. Two agents on the same branch race a compare-and-swap. One wins. The other retries.
+Two writers on different branches don't collide. Two writers on the same branch race a compare-and-swap. One wins. The other retries.
 
 ## Git Without GitHub
 
 ```bash
 cd ./my-app
 trunks
-git checkout -b agent/run-7
+git checkout -b feature/auth
 git add .
-git commit -m "agent output"
+git commit -m "update auth"
 git push
 ```
 
@@ -104,21 +104,21 @@ git push
 
 ## Python
 
-Use the Python SDK when your agent wants files and commits without shelling out.
+Use the Python SDK when your application wants files and commits without shelling out.
 
 ```python
 from trunks import Trunk
 
 with Trunk(name="my-app") as trunk:
     trunk.write("task.md", b"Fix auth\n")
-    trunk.commit(message="agent output")
+    trunk.commit(message="update auth")
     trunk.push()
 ```
 
 ```python
 async with Trunk(name="my-app") as trunk:
     await trunk.write("task.md", b"Fix auth\n")
-    await trunk.commit(message="agent output")
+    await trunk.commit(message="update auth")
     await trunk.push()
 ```
 
@@ -131,7 +131,7 @@ const trunks = new Trunks();
 const fs = await trunks.mount({ repo: "my-app", path: "./my-app", watch: true });
 
 await fs.write("task.md", "Fix auth\n");
-await fs.checkpoint("agent output");
+await fs.checkpoint("update auth");
 await fs.push();
 ```
 
@@ -146,12 +146,12 @@ trunks branch list --json --limit 20 --offset 0
 
 ```python
 client = Trunks(cwd="./my-app")
-client.branches.create(name="agent/run-7", from_ref="main")
+client.branches.create(name="feature/auth", from_ref="main")
 ```
 
 ```ts
 const trunks = new Trunks();
-await trunks.branches.create({ name: "agent/run-7", from: "main" });
+await trunks.branches.create({ name: "feature/auth", from: "main" });
 ```
 
 List calls return the same envelope everywhere:
@@ -177,7 +177,7 @@ List calls return the same envelope everywhere:
 | Use Node | [Node SDK](docs/sdk-node.md) |
 | Resource shapes | [Resources](docs/resources.md) |
 | Pick a backend | [Backends](docs/backends/README.md) |
-| Wire up an agent framework | [Agents](docs/agents.md) |
+| Use Trunks with agent frameworks | [Agents](docs/agents.md) |
 | Understand the bytes | [Architecture](docs/architecture.md) |
 
 Backend guides:

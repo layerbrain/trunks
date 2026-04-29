@@ -35,7 +35,7 @@ npm test --prefix ./my-app
 
 ```bash
 cd ./my-app
-trunks checkpoint -m "agent output"
+trunks checkpoint -m "update auth"
 ```
 
 A checkpoint is a real Git commit:
@@ -77,16 +77,16 @@ Pull reads backend refs, downloads any missing objects, and updates your workspa
 A branch is a pointer. Creating one is one ref write. There is no copy.
 
 ```bash
-trunks branch create --name agent/run-7 --from main
-trunks branch switch --name agent/run-7
+trunks branch create --name feature/auth --from main
+trunks branch switch --name feature/auth
 ```
 
 ```text
 refs/heads/main      → commit-A
-refs/heads/agent/run-7 → commit-A   (same commit, different name)
+refs/heads/feature/auth → commit-A   (same commit, different name)
 ```
 
-The agent commits, push moves only `refs/heads/agent/run-7`. `main` doesn't budge.
+The worker commits, push moves only `refs/heads/feature/auth`. `main` doesn't budge.
 
 ## What Goes Wrong, And What To Do
 

@@ -44,7 +44,7 @@ Default mount uses a real directory. `--mode virtual` sparsely materializes larg
 ```bash
 trunks diff
 trunks diff --vs main --json
-trunks checkpoint -m "agent output"
+trunks checkpoint -m "update auth"
 trunks history --json
 trunks log --json
 trunks push
@@ -56,11 +56,11 @@ trunks fetch
 
 ```bash
 trunks branch list --json --limit 20 --offset 0
-trunks branch create --name agent/run-7 --from main
-trunks branch get --name agent/run-7 --json
-trunks branch update --name agent/run-7 --from main --json
-trunks branch switch --name agent/run-7
-trunks branch delete --name agent/run-7
+trunks branch create --name feature/auth --from main
+trunks branch get --name feature/auth --json
+trunks branch update --name feature/auth --from main --json
+trunks branch switch --name feature/auth
+trunks branch delete --name feature/auth
 
 trunks tag list --json --limit 20 --offset 0
 trunks tag create --name v1.0 --at main
@@ -70,7 +70,7 @@ trunks tag delete --name v1.0
 trunks rollback --to tags/v1.0
 ```
 
-Use branches for agent runs.
+Use branches for parallel work.
 
 ## Cache
 

@@ -35,10 +35,10 @@ trunks repo update --name my-app --backend s3://company-trunks-2 --json
 trunks repo delete --name my-app --json
 trunks repo list --json --limit 20 --offset 0
 
-trunks branch create --name agent/run-7 --from main --json
-trunks branch get --name agent/run-7 --json
-trunks branch update --name agent/run-7 --from main --json
-trunks branch delete --name agent/run-7 --json
+trunks branch create --name feature/auth --from main --json
+trunks branch get --name feature/auth --json
+trunks branch update --name feature/auth --from main --json
+trunks branch delete --name feature/auth --json
 trunks branch list --json --limit 20 --offset 0
 
 trunks tag create --name v1.0 --at main --json
@@ -74,10 +74,10 @@ repo = client.repos.get(name="my-app")
 repo = client.repos.update(name="my-app", backend="s3://company-trunks-2")
 client.repos.delete(name="my-app")
 
-branch = client.branches.create(name="agent/run-7", from_ref="main")
-branch = client.branches.get(name="agent/run-7")
-branch = client.branches.update(name="agent/run-7", from_ref="main")
-client.branches.delete(name="agent/run-7")
+branch = client.branches.create(name="feature/auth", from_ref="main")
+branch = client.branches.get(name="feature/auth")
+branch = client.branches.update(name="feature/auth", from_ref="main")
+client.branches.delete(name="feature/auth")
 
 hook = client.webhooks.create(url="https://example.com/trunks", events=["push"])
 hook = client.webhooks.get(id=hook["id"])
@@ -97,10 +97,10 @@ await trunks.repos.get({ name: "my-app" });
 await trunks.repos.update({ name: "my-app", backend: "s3://company-trunks-2" });
 await trunks.repos.delete({ name: "my-app" });
 
-const branch = await trunks.branches.create({ name: "agent/run-7", from: "main" });
-await trunks.branches.get({ name: "agent/run-7" });
-await trunks.branches.update({ name: "agent/run-7", from: "main" });
-await trunks.branches.delete({ name: "agent/run-7" });
+const branch = await trunks.branches.create({ name: "feature/auth", from: "main" });
+await trunks.branches.get({ name: "feature/auth" });
+await trunks.branches.update({ name: "feature/auth", from: "main" });
+await trunks.branches.delete({ name: "feature/auth" });
 
 const hook = await trunks.webhooks.create({ url: "https://example.com/trunks", events: ["push"] });
 await trunks.webhooks.get({ id: hook.id });

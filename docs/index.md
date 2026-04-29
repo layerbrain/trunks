@@ -1,10 +1,10 @@
 # Trunks
 
-The most powerful open-source POSIX-compatible, Git-native filesystem for AI agents.
+The most powerful open-source POSIX-compatible, Git-native filesystem.
 
-**Trunks turns any backend into a Git-compatible remote.** Point it at S3, R2, GCS, Azure Blob, Postgres, SFTP, a fileshare, or local disk. You get branches, commits, refs, push, pull, the whole protocol. No Git server. No service to operate. No control plane. No repo copy per agent.
+**Trunks turns any backend into a Git-compatible remote.** Point it at S3, R2, GCS, Azure Blob, Postgres, SFTP, a fileshare, or local disk. You get branches, commits, refs, push, pull, the whole protocol. No Git server. No service to operate. No control plane. No repo copy per workspace.
 
-Agents write normal files. Developers run normal Git.
+Applications write normal files. Developers run normal Git.
 
 ```bash
 pip install trunks
@@ -13,7 +13,7 @@ npm install @layerbrain/trunks
 trunks repo create --name my-app --backend s3://company-trunks
 trunks mount --repo my-app --path ./my-app
 echo "Fix auth" > my-app/task.md
-trunks checkpoint -m "agent output"
+trunks checkpoint -m "update auth"
 trunks push
 ```
 
@@ -43,7 +43,7 @@ trunks push
 | Storage root | Where bytes live. `s3://company-trunks`. |
 | Derived trunk | `s3://company-trunks/trunks/my-app.trunk`. |
 | Checkpoint | A real Git commit object. |
-| Branch | A ref pointer. Use one per agent run. |
+| Branch | A ref pointer. Use one per task. |
 | CAS | Compare-and-swap on ref updates. Two writers can't clobber. |
 
 ## Docs
