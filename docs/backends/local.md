@@ -1,8 +1,19 @@
 # Local Disk And Shared Filesystems
 
-These schemes write to a directory: `local`, `file`, `nfs`, and `smb`.
+Use this for local development, mounted NAS, NFS shares, SMB shares, and simple self-hosting.
 
-## URL Forms
+```bash
+trunks storage create --name primary local:///srv/trunks
+trunks storage ping primary
+```
+
+Repo path:
+
+```text
+/srv/trunks/trunks/my-app.trunk/
+```
+
+Supported URL forms:
 
 ```text
 local:///srv/trunks
@@ -11,23 +22,6 @@ nfs:///mnt/nfs
 smb:///mnt/smb
 ```
 
-The backend is the directory. Each repo gets a `.trunk` directory under it:
+The OS handles filesystem credentials and mount permissions.
 
-```text
-/srv/trunks/trunks/lazy-lms.trunk/
-```
-
-## Credentials
-
-None in Trunks. The OS handles auth at mount time.
-
-## Connect And Validate
-
-```bash
-trunks storage add --name primary --backend local --path /srv/trunks
-trunks storage ping primary
-```
-
-## Notes
-
-Network filesystems vary in locking and fsync behavior. For heavy concurrent agents, prefer S3-compatible storage or Postgres.
+For high-concurrency agent swarms, prefer S3-compatible storage or Postgres.

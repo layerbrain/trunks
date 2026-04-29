@@ -1,0 +1,56 @@
+{
+  "name": "@layerbrain/trunks",
+  "version": "1.0.0",
+  "description": "Git repos backed by your own storage. Push to S3, R2, Tigris, MinIO, Postgres, SFTP, NFS, or local disk.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/trunks.test.mjs",
+    "test:integration": "npm run build && node --test tests/integration.test.mjs",
+    "prepack": "npm run clean && npm run build",
+    "pack:dry": "npm pack --dry-run",
+    "publish:dry": "npm publish --dry-run --access public",
+    "publish:public": "npm publish --access public",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/layerbrain/trunks.git",
+    "directory": "trunks-node"
+  },
+  "keywords": [
+    "trunks",
+    "agents",
+    "filesystem",
+    "storage",
+    "s3",
+    "git"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

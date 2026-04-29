@@ -1,0 +1,74 @@
+site_name: Trunks
+site_description: Git repos backed by your own storage. CLI, Python SDK, Node SDK.
+site_url: https://layerbrain.github.io/trunks/
+repo_url: https://github.com/layerbrain/trunks
+repo_name: layerbrain/trunks
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: black
+      accent: black
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: white
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+nav:
+  - Home: index.md
+  - Tutorial: tutorial.md
+  - Architecture: architecture.md
+  - CLI Reference: cli.md
+  - Lifecycle: lifecycle.md
+  - API-shaped Resources: resources.md
+  - Python SDK: sdk-python.md
+  - Node SDK: sdk-node.md
+  - Agents: agents.md
+  - Backends:
+      - Overview: backends/README.md
+      - S3-compatible: backends/s3.md
+      - Azure Blob: backends/azure.md
+      - GCS: backends/gcs.md
+      - Postgres: backends/postgres.md
+      - SFTP: backends/sftp.md
+      - Local disk: backends/local.md
+      - Memory: backends/memory.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/layerbrain/trunks

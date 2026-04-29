@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://layerbrain.com/trunks/protocol.schema.json",
+  "title": "Trunks JSON-RPC Protocol",
+  "type": "object",
+  "required": ["jsonrpc", "method"],
+  "properties": {
+    "jsonrpc": { "const": "2.0" },
+    "id": { "type": ["string", "number", "null"] },
+    "method": {
+      "type": "string",
+      "enum": [
+        "hello.handshake",
+        "runtime.status",
+        "repo.status",
+        "fs.read",
+        "fs.write",
+        "fs.list",
+        "fs.exists",
+        "fs.remove",
+        "fs.copy",
+        "fs.move",
+        "fs.mkdir",
+        "vcs.checkpoint",
+        "vcs.diff",
+        "vcs.history",
+        "vcs.push",
+        "vcs.pull",
+        "daemon.shutdown"
+      ]
+    },
+    "params": { "type": "object" }
+  },
+  "additionalProperties": false
+}

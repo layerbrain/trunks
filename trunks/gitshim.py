@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "status":
             return _status(repo)
         if command == "init":
-            GitCache(repo).rebuild()
+            GitCache(repo).rebuild(force=True)
             print("Reinitialized existing Trunks repository")
             return 0
         if command == "add":
@@ -126,7 +126,7 @@ def _add(repo: Repository, args: list[str]) -> int:
     for target in targets:
         path = _worktree_path(repo, target)
         repo.add_worktree_path(path, force=force)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     entries = repo.index_entries()
     if not entries:
         return 0
@@ -173,7 +173,7 @@ def _commit(repo: Repository, args: list[str]) -> int:
     parsed, _ = parser.parse_known_args(args)
     message = parsed.message or "commit"
     commit = repo.create_commit(message=message)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     print(f"[{repo.current_branch} {commit.id.short(7)}] {message}")
     return 0
 
@@ -187,11 +187,11 @@ def _checkout(repo: Repository, args: list[str]) -> int:
             sys.stderr.write(f"git checkout {args[0]}: missing branch\n")
             return 1
         repo.create_branch(args[1])
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
         print(f"Switched to a new branch '{args[1]}'")
         return 0
     repo.checkout(args[0])
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     print(f"Switched to branch '{args[0]}'")
     return 0
 
@@ -205,15 +205,15 @@ def _branch(repo: Repository, args: list[str]) -> int:
             sys.stderr.write(f"error: cannot delete branch '{args[1]}' checked out at '{repo.root}'\n")
             return 1
         repo.delete_ref(args[1])
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
         print(f"Deleted branch {args[1]}")
         return 0
     if args and args[0].startswith("-"):
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
         return _passthrough(["branch", *args])
     if args:
         repo.create_branch(args[0], switch=False)
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
         return 0
     current = repo.current_branch
     for name, _ in repo.list_refs():
@@ -231,7 +231,7 @@ def _ls_files(repo: Repository) -> int:
 
 def _log(repo: Repository, args: list[str]) -> int:
     if args:
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
         return _passthrough(["log", *args])
     oid = repo.ref(repo.current_branch)
     while oid is not None:
@@ -256,7 +256,7 @@ def _rm(repo: Repository, args: list[str]) -> int:
         if path.exists() and path.is_file():
             path.unlink()
         repo.delete_file(rel)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     return 0
 
 
@@ -274,7 +274,7 @@ def _mv(repo: Repository, args: list[str]) -> int:
     data = repo.read_file(source)
     repo.delete_file(source)
     repo.write_file(dest, data)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     return 0
 
 
@@ -342,7 +342,7 @@ def _tag(repo: Repository, args: list[str]) -> int:
         sys.stderr.write("fatal: cannot tag before first commit\n")
         return 1
     repo.set_ref(f"refs/tags/{args[0]}", head)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     return 0
 
 
@@ -381,7 +381,7 @@ def _push(repo: Repository, args: list[str]) -> int:
     if mode == "mirror":
         git_code = 0
         if repo.get_meta("git_origin"):
-            GitCache(repo).rebuild()
+            GitCache(repo).rebuild(force=True)
             git_code = _passthrough(["push", *args])
         trunks_code = _trunks_command("push")
         policy = mirror_policy_from_env(repo.get_meta("mirror_policy", "strict") or "strict")
@@ -390,17 +390,33 @@ def _push(repo: Repository, args: list[str]) -> int:
 
 
 def _working_tree_git(repo: Repository, argv: list[str]) -> int:
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     result = subprocess.run([system_git(), *argv], cwd=repo.root)
     if result.returncode == 0:
         _import_git_state(repo)
-        GitCache(repo).rebuild()
+        GitCache(repo).rebuild(force=True)
     return result.returncode
 
 
 def _trunks_command(command: str) -> int:
-    result = subprocess.run([sys.executable, "-m", "trunks.cli", command], text=True)
+    result = subprocess.run(
+        [sys.executable, "-m", "trunks.cli", command],
+        text=True,
+        env=_subprocess_env(),
+    )
     return result.returncode
+
+
+def _subprocess_env() -> dict[str, str]:
+    # Tests change cwd into a temp directory before invoking the gitshim, which
+    # means the dev source tree is no longer on sys.path. Prepend the directory
+    # containing the `trunks` package so the subprocess can import itself
+    # whether or not the wheel is pip-installed.
+    env = os.environ.copy()
+    package_parent = str(Path(__file__).resolve().parent.parent)
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = f"{package_parent}{os.pathsep}{existing}" if existing else package_parent
+    return env
 
 
 def _passthrough(argv: list[str]) -> int:

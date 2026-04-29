@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import hashlib
 import json
 import os
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 from typing import AsyncIterator
@@ -15,6 +18,11 @@ from ..journal import JournalEntry
 from ..refs import Ref, normalize_ref
 from ..segment import encode_segment, read_segment_object
 from ..url import BackendURL
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 
 class Local(Backend):
@@ -138,7 +146,7 @@ class Local(Backend):
 
     def _write_atomic(self, path: Path, data: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+        tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
         tmp.write_bytes(data)
         os.replace(tmp, path)
 
@@ -208,12 +216,43 @@ class Local(Backend):
         return True
 
     def _cas_ref_sync(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool:
-        path = self._ref_path(name)
-        current = None
-        if path.exists():
-            raw = path.read_text(encoding="utf-8").strip()
-            current = ObjectId(raw) if raw else None
-        if current != expected:
-            return False
-        self._write_atomic(path, f"{new}\n".encode())
-        return True
+        with self._ref_lock(name):
+            path = self._ref_path(name)
+            current = None
+            if path.exists():
+                raw = path.read_text(encoding="utf-8").strip()
+                current = ObjectId(raw) if raw else None
+            if current != expected:
+                return False
+            self._write_atomic(path, f"{new}\n".encode())
+            return True
+
+    @contextlib.contextmanager
+    def _ref_lock(self, name: str):
+        key = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        path = self.root / "locks" / "refs" / f"{key}.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a+b") as handle:
+            self._lock_file(handle)
+            try:
+                yield
+            finally:
+                self._unlock_file(handle)
+
+    def _lock_file(self, handle) -> None:
+        if os.name == "nt":
+            handle.seek(0)
+            if not handle.read(1):
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            return
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+    def _unlock_file(self, handle) -> None:
+        if os.name == "nt":
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

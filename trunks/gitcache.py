@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import zlib
@@ -7,6 +8,15 @@ from pathlib import Path
 
 from .errors import GitNotFound
 from .repository import Repository
+
+
+def _shim_marker_path() -> Path:
+    config_home = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(config_home) / "trunks" / "git-shim-installed"
+
+
+def shim_marker_present() -> bool:
+    return _shim_marker_path().exists()
 
 
 GIT_NOT_FOUND_MESSAGE = """Git was not found.
@@ -23,7 +33,23 @@ class GitCache:
         self.repository = repository
         self.root = repository.root / ".git"
 
-    def rebuild(self) -> None:
+    def _git_interop_active(self) -> bool:
+        # Maintain .git/ only when the user opted into git interop:
+        #   1. .git/ already exists (came from a real git repo, or was seeded
+        #      by a previous Trunks run where the shim was installed), OR
+        #   2. the user installed the trunks git shim, which writes a marker
+        #      under XDG_CONFIG_HOME / .config/trunks/git-shim-installed.
+        # Otherwise short-circuit so a fresh `trunks mount` does not surprise
+        # the user with an unexplained .git/ directory next to .trunks/.
+        return self.root.exists() or shim_marker_present()
+
+    def rebuild(self, *, force: bool = False) -> None:
+        # `force=True` is the signal that the caller IS the git-interop entry
+        # point (gitshim being invoked through the user's PATH). In that case
+        # we always materialise `.git/` because the very fact that gitshim
+        # is running proves the user wants git interop right now.
+        if not force and not self._git_interop_active():
+            return
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "objects").mkdir(parents=True, exist_ok=True)
         (self.root / "refs" / "heads").mkdir(parents=True, exist_ok=True)
@@ -61,9 +87,10 @@ class GitCache:
             path = remote_heads / name.removeprefix("refs/heads/")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f"{oid}\n", encoding="utf-8")
-        if self.repository.ref(self.repository.current_branch) is not None:
+        git = find_system_git()
+        if git is not None and self.repository.ref(self.repository.current_branch) is not None:
             subprocess.run(
-                [system_git(), "read-tree", "--reset", "HEAD"],
+                [git, "read-tree", "--reset", "HEAD"],
                 cwd=self.repository.root,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

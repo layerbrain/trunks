@@ -11,6 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from tests.contract.backend import assert_backend_contract
+from tests.contract.workflow import assert_workflow_contract
 from trunks.backends.sftp import SFTP
 from trunks.credentials import SFTPCredentials
 
@@ -90,6 +91,20 @@ class SFTPBackendTests(unittest.IsolatedAsyncioTestCase):
             )
             try:
                 await assert_backend_contract(self, backend)
+            finally:
+                await backend.__aexit__(None, None, None)
+
+    async def test_workflow_contract_against_sftp(self) -> None:
+        with sftp_server() as (port, key):
+            backend = SFTP(
+                host="127.0.0.1",
+                port=port,
+                username="foo",
+                credentials=SFTPCredentials(ssh_key=key),
+                root="/upload/workflow.trunk",
+            )
+            try:
+                await assert_workflow_contract(self, backend)
             finally:
                 await backend.__aexit__(None, None, None)
 

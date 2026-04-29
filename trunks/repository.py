@@ -44,6 +44,9 @@ class Status:
     indexed: int
     dirty: bool
     backend: str | None
+    untracked: tuple[str, ...] = ()
+    modified: tuple[str, ...] = ()
+    deleted: tuple[str, ...] = ()
 
 
 class Repository:
@@ -404,13 +407,36 @@ class Repository:
 
     def write_file(self, path: str, data: bytes, *, branch: str | None = None) -> None:
         normalized = self._normalize_trackable_path(path)
-        blob = Blob.from_data(data)
-        self.put_object(blob.id, blob.canonical())
+        canonical = canonical_object("blob", data)
+        oid = ObjectId.from_bytes(canonical)
+        with self._connect() as conn:
+            conn.execute(
+                "insert or ignore into objects(oid, kind, data) values (?, ?, ?)",
+                (str(oid), "blob", canonical),
+            )
+            conn.execute(
+                "insert into index_entries(path, oid, mode) values (?, ?, ?) "
+                "on conflict(path) do update set oid = excluded.oid, mode = excluded.mode",
+                (normalized, str(oid), "100644"),
+            )
+
+    def stage_blob(self, data: bytes) -> ObjectId:
+        canonical = canonical_object("blob", data)
+        oid = ObjectId.from_bytes(canonical)
+        with self._connect() as conn:
+            conn.execute(
+                "insert or ignore into objects(oid, kind, data) values (?, ?, ?)",
+                (str(oid), "blob", canonical),
+            )
+        return oid
+
+    def set_file_object(self, path: str, oid: ObjectId, *, mode: str = "100644") -> None:
+        normalized = self._normalize_trackable_path(path)
         with self._connect() as conn:
             conn.execute(
                 "insert into index_entries(path, oid, mode) values (?, ?, ?) "
                 "on conflict(path) do update set oid = excluded.oid, mode = excluded.mode",
-                (normalized, str(blob.id), "100644"),
+                (normalized, str(oid), mode),
             )
 
     def read_file(self, path: str, *, branch: str | None = None) -> bytes:
@@ -432,6 +458,48 @@ class Repository:
         normalized = self._normalize_trackable_path(path)
         with self._connect() as conn:
             conn.execute("delete from index_entries where path = ?", (normalized,))
+
+    def copy_file(self, source: str, dest: str, *, branch: str | None = None) -> None:
+        self.write_file(dest, self.read_file(source, branch=branch), branch=branch)
+
+    def move_file(self, source: str, dest: str, *, branch: str | None = None) -> None:
+        self.copy_file(source, dest, branch=branch)
+        self.delete_file(source, branch=branch)
+
+    def make_dir(self, path: str) -> None:
+        if path not in {"", ".", "/"}:
+            self._normalize_trackable_path(path)
+
+    def list_dir(self, path: str = "", *, branch: str | None = None) -> list[str]:
+        normalized = "" if path in {"", ".", "/"} else self._normalize_trackable_path(path)
+        entries = self._entries_for_listing(branch=branch)
+        prefix = f"{normalized}/" if normalized else ""
+        children: set[str] = set()
+        for entry in entries:
+            if normalized and entry.path == normalized:
+                continue
+            if prefix and not entry.path.startswith(prefix):
+                continue
+            rest = entry.path[len(prefix) :] if prefix else entry.path
+            if rest:
+                children.add(rest.split("/", 1)[0])
+        return sorted(children)
+
+    def exists(self, path: str, *, branch: str | None = None) -> bool:
+        normalized = "" if path in {"", ".", "/"} else self._normalize_trackable_path(path)
+        if not normalized:
+            return True
+        entries = self._entries_for_listing(branch=branch)
+        prefix = f"{normalized}/"
+        return any(entry.path == normalized or entry.path.startswith(prefix) for entry in entries)
+
+    def _entries_for_listing(self, *, branch: str | None = None) -> list[IndexEntry]:
+        if branch is None or branch == self.current_branch:
+            return self.index_entries()
+        head = self.ref(branch)
+        if head is None:
+            raise ObjectNotFound(branch)
+        return self.flatten_tree(self.load_commit(head).tree)
 
     def add_worktree_path(self, path: Path, *, force: bool = False) -> None:
         if path.is_symlink():
@@ -814,20 +882,117 @@ class Repository:
             path.write_bytes(self.blob_payload(entry.oid))
 
     def status(self, *, compare_worktree: bool = False) -> Status:
-        dirty = False
+        index = self.index_entries()
+        untracked: list[str] = []
+        modified: list[str] = []
+        deleted: list[str] = []
         if compare_worktree:
-            for entry in self.index_entries():
-                path = self._safe_worktree_file_path(entry.path)
-                if not path.exists() or Blob.from_data(path.read_bytes()).id != entry.oid:
-                    dirty = True
-                    break
+            untracked, modified, deleted = self._worktree_status(index)
+        dirty = bool(untracked or modified or deleted)
         return Status(
             branch=self.current_branch,
             head=self.ref(self.current_branch),
-            indexed=len(self.index_entries()),
+            indexed=len(index),
             dirty=dirty,
             backend=self.backend_url(),
+            untracked=tuple(sorted(untracked)),
+            modified=tuple(sorted(modified)),
+            deleted=tuple(sorted(deleted)),
         )
+
+    def _worktree_status(
+        self, index: list[IndexEntry]
+    ) -> tuple[list[str], list[str], list[str]]:
+        # Stat-cache fast path: first compare stable file metadata against the
+        # cached snapshot for paths we've seen before; only hash files whose
+        # stat changed or that are new. Cuts per-file SHA-1 cost on warm runs.
+        cache = self._read_status_stat_cache()
+        index_by_path = {entry.path: entry.oid for entry in index}
+        seen: set[str] = set()
+        untracked: list[str] = []
+        modified: list[str] = []
+        deleted: list[str] = []
+        new_cache: dict[str, dict[str, object]] = {}
+
+        for path in sorted(self.root.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            try:
+                rel = self._relative_worktree_path(path.resolve(strict=False))
+            except InvalidPath:
+                continue
+            if is_internal_path(rel) or is_ignored(rel, self.root):
+                continue
+            try:
+                normalised = self._normalize_trackable_path(rel)
+            except InvalidPath:
+                continue
+            seen.add(normalised)
+
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            stat_key = {
+                "size": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+                "ctime_ns": stat.st_ctime_ns,
+                "ino": stat.st_ino,
+                "mode": stat.st_mode,
+            }
+            cached = cache.get(normalised)
+            indexed_oid = index_by_path.get(normalised)
+
+            if (
+                cached is not None
+                and cached.get("size") == stat_key["size"]
+                and cached.get("mtime_ns") == stat_key["mtime_ns"]
+                and cached.get("ctime_ns") == stat_key["ctime_ns"]
+                and cached.get("ino") == stat_key["ino"]
+                and cached.get("mode") == stat_key["mode"]
+                and "oid" in cached
+            ):
+                content_oid_value = str(cached["oid"])
+            else:
+                content_oid_value = str(Blob.from_data(path.read_bytes()).id)
+            new_cache[normalised] = {**stat_key, "oid": content_oid_value}
+
+            if indexed_oid is None:
+                untracked.append(normalised)
+            elif str(indexed_oid) != content_oid_value:
+                modified.append(normalised)
+
+        for indexed_path in index_by_path:
+            if indexed_path not in seen:
+                deleted.append(indexed_path)
+
+        self._write_status_stat_cache(new_cache)
+        return untracked, modified, deleted
+
+    def _status_stat_cache_path(self) -> Path:
+        return self.path.parent / f".{self.path.name}.status-stat.json"
+
+    def _read_status_stat_cache(self) -> dict[str, dict[str, object]]:
+        path = self._status_stat_cache_path()
+        if not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        return {str(k): v for k, v in raw.items() if isinstance(v, dict)}
+
+    def _write_status_stat_cache(self, cache: dict[str, dict[str, object]]) -> None:
+        path = self._status_stat_cache_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+            tmp.write_text(json.dumps(cache, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            pass
 
     def all_objects(self) -> list[tuple[ObjectId, bytes]]:
         with self._connect() as conn:

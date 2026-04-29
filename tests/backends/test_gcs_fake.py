@@ -9,6 +9,7 @@ import unittest
 from contextlib import contextmanager
 
 from tests.contract.backend import assert_backend_contract
+from tests.contract.workflow import assert_workflow_contract
 from trunks.backends.gcs import GCS
 
 
@@ -69,6 +70,12 @@ class GCSFakeTests(unittest.IsolatedAsyncioTestCase):
             backend = GCS(bucket="repo", prefix="repo.trunk", endpoint=endpoint)
             await backend.ensure_bucket()
             await assert_backend_contract(self, backend)
+
+    async def test_workflow_contract_against_fake_gcs(self) -> None:
+        with fake_gcs_server() as endpoint:
+            backend = GCS(bucket="workflow", prefix="workflow.trunk", endpoint=endpoint)
+            await backend.ensure_bucket()
+            await assert_workflow_contract(self, backend)
 
 
 if __name__ == "__main__":

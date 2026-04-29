@@ -1,0 +1,73 @@
+name: Packages
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-packages:
+    name: Python package metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packaging tools
+        run: python -m pip install --upgrade build "twine>=6.2"
+      - name: Check shared version
+        run: python scripts/check_versions.py
+      - name: Build and check trunks
+        run: |
+          rm -rf dist
+          python -m build --sdist --wheel
+          python -m twine check dist/*
+          mkdir -p /tmp/trunks-root-sdist
+          tar -xzf dist/trunks-*.tar.gz -C /tmp/trunks-root-sdist --strip-components=1
+          (cd /tmp/trunks-root-sdist && python -m build --wheel)
+      - name: Build and check trunks-python
+        run: |
+          cd trunks-python
+          rm -rf dist
+          python -m build --sdist --wheel
+          python -m twine check dist/*
+          mkdir -p /tmp/trunks-python-sdist
+          tar -xzf dist/trunks_python-*.tar.gz -C /tmp/trunks-python-sdist --strip-components=1
+          (cd /tmp/trunks-python-sdist && python -m build --wheel)
+
+  node-package:
+    name: Node package metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: trunks-node/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check shared version
+        run: python scripts/check_versions.py
+      - name: Install Node dependencies
+        run: npm ci
+        working-directory: trunks-node
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+        working-directory: trunks-node
+      - name: Dry-run npm package
+        run: |
+          npm run pack:dry
+          npm run publish:dry
+        working-directory: trunks-node

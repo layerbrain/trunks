@@ -1,0 +1,86 @@
+name: Release Tests
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit (${{ matrix.os }}, py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install package
+        run: pip install -e .
+      - name: Run cross-platform unit tests
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            python -m unittest \
+              tests.unit.test_mount_server \
+              tests.unit.test_mount_xdr \
+              tests.unit.test_mount_nfs \
+              tests.unit.test_mount_rpc \
+              tests.unit.test_rpc_protocol \
+              tests.unit.test_cache \
+              tests.unit.test_refs \
+              tests.unit.test_objects \
+              -v
+          else
+            python -m unittest \
+              tests.unit.test_mount_sandbox_probe \
+              tests.unit.test_mount_supervisor \
+              tests.unit.test_mount_server \
+              tests.unit.test_mount_xdr \
+              tests.unit.test_mount_nfs \
+              tests.unit.test_mount_rpc \
+              tests.unit.test_cli_mount_virtual \
+              tests.unit.test_cli_mount_doctor \
+              tests.unit.test_rpc_protocol \
+              tests.unit.test_rpc_socket \
+              tests.unit.test_cache \
+              tests.unit.test_refs \
+              tests.unit.test_objects \
+              tests.unit.test_cli_versioning \
+              -v
+          fi
+
+  real-mount-macos:
+    name: Real filesystem mount (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e .
+      - name: Run real mount tests
+        env:
+          TRUNKS_RUN_REAL_NFS_TESTS: "1"
+        run: |
+          python3 -m unittest \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_round_trip \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_edge_matrix \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_protocol_edges \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_posix_semantics \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_remount_cycle \
+            tests.unit.test_mount_nfs_real.RealNfsMountTests.test_remount_reaps_dead_daemon_and_stale_kernel_mount \
+            -v

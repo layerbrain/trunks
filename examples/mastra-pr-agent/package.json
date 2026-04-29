@@ -1,0 +1,24 @@
+{
+  "name": "trunks-mastra-pr-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/run.js"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.0",
+    "@mastra/core": "^1.0.0",
+    "zod": "^3.25.0",
+    "@layerbrain/trunks": "file:../../trunks-node"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
