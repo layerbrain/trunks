@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import AsyncIterator, Awaitable, Callable, Iterator, TypeVar
 
 from .backend import Backend
+from .cache import CachedBackend
 from .config import (
     GlobalConfig,
     RepoConfig,
@@ -80,8 +81,26 @@ class Trunk:
     def read(self, path: str, *, branch: str | None = None) -> bytes | Awaitable[bytes]:
         return self._auto(lambda: self.engine.read(path, branch=branch))
 
-    def delete(self, path: str, *, branch: str | None = None) -> None | Awaitable[None]:
+    def list(self, path: str = "", *, branch: str | None = None) -> list[str] | Awaitable[list[str]]:
+        return self._auto(lambda: self.engine.list(path, branch=branch))
+
+    def exists(self, path: str, *, branch: str | None = None) -> bool | Awaitable[bool]:
+        return self._auto(lambda: self.engine.exists(path, branch=branch))
+
+    def remove(self, path: str, *, branch: str | None = None) -> None | Awaitable[None]:
         return self._auto(lambda: self.engine.delete(path, branch=branch))
+
+    def copy(self, source: str, dest: str, *, branch: str | None = None) -> None | Awaitable[None]:
+        return self._auto(lambda: self.engine.copy(source, dest, branch=branch))
+
+    def move(self, source: str, dest: str, *, branch: str | None = None) -> None | Awaitable[None]:
+        return self._auto(lambda: self.engine.move(source, dest, branch=branch))
+
+    def mkdir(self, path: str) -> None | Awaitable[None]:
+        return self._auto(lambda: self.engine.mkdir(path))
+
+    def delete(self, path: str, *, branch: str | None = None) -> None | Awaitable[None]:
+        return self.remove(path, branch=branch)
 
     def commit(
         self,
@@ -277,8 +296,8 @@ class Trunk:
         if primary is not None and mirrors:
             from .backends.multi import Multi
 
-            return Multi(primary=primary, mirrors=mirrors)
-        return primary
+            return CachedBackend(Multi(primary=primary, mirrors=mirrors))
+        return CachedBackend(primary) if primary is not None else None
 
     def _looks_like_local_db(self, value: str) -> bool:
         return "://" not in value and (value.endswith(".trunk") or value.startswith(".trunks/"))

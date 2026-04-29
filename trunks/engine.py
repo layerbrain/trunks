@@ -31,8 +31,23 @@ class Engine:
     async def read(self, path: str, *, branch: str | None = None) -> bytes:
         return self.repository.read_file(path, branch=branch)
 
+    async def list(self, path: str = "", *, branch: str | None = None) -> list[str]:
+        return self.repository.list_dir(path, branch=branch)
+
+    async def exists(self, path: str, *, branch: str | None = None) -> bool:
+        return self.repository.exists(path, branch=branch)
+
     async def delete(self, path: str, *, branch: str | None = None) -> None:
         self.repository.delete_file(path, branch=branch)
+
+    async def copy(self, source: str, dest: str, *, branch: str | None = None) -> None:
+        self.repository.copy_file(source, dest, branch=branch)
+
+    async def move(self, source: str, dest: str, *, branch: str | None = None) -> None:
+        self.repository.move_file(source, dest, branch=branch)
+
+    async def mkdir(self, path: str) -> None:
+        self.repository.make_dir(path)
 
     async def commit(
         self,
@@ -63,12 +78,21 @@ class Engine:
         await Fetch(self.repository, self.backend).run()
 
     async def pull(self) -> None:
+        from . import audit
         from .pull import Pull
 
         if self.backend is None:
             return
         await self.open()
         await Pull(self.repository, self.backend).run()
+        audit.record(
+            self.repository,
+            "pull",
+            {
+                "branch": self.repository.current_branch,
+                "head": str(self.repository.ref(self.repository.current_branch)),
+            },
+        )
 
     async def push(self) -> "PushResult | None":
         from .push import Push
@@ -83,6 +107,16 @@ class Engine:
         mirror_failures = getattr(self.backend, "mirror_failures", [])
         if mirror_failures:
             raise BackendUnavailable("mirror sync failed: " + "; ".join(mirror_failures))
+        from . import audit, webhooks
+
+        push_payload = {
+            "branch": self.repository.current_branch,
+            "head": str(self.repository.ref(self.repository.current_branch)),
+            "refs_pushed": result.refs_pushed,
+            "objects_uploaded": result.objects_uploaded,
+        }
+        audit.record(self.repository, "push", push_payload)
+        await webhooks.emit(self.repository, "push", push_payload)
         return result
 
     async def log(self, *, branch: str | None = None, limit: int = 50) -> AsyncIterator[Commit]:

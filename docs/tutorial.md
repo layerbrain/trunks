@@ -1,100 +1,98 @@
 # Tutorial
 
-This walks through the normal path: connect storage once, keep using Git.
+Five minutes from zero to a synced repo.
 
-## Install
+## 1. Install
 
 ```bash
 pip install trunks
 ```
 
-## Connect Storage
-
-Pick a backend your team already controls.
+That ships the CLI. Add the Node package only if your agent runs in Node:
 
 ```bash
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_REGION=us-east-1
-
-mkdir myrepo && cd myrepo
-git init
-trunks init
-trunks storage add --name primary --backend s3 --bucket my-bucket
+npm install @layerbrain/trunks
 ```
 
-`s3://my-bucket` is the backend root. The actual trunk for this repo is resolved from the folder name:
+## 2. Pick A Backend
+
+A backend is one storage root. Trunks puts every repo under it by name.
 
 ```text
-s3://my-bucket/trunks/myrepo.trunk/
+repo:    my-app
+storage: s3://company-trunks
+actual:  s3://company-trunks/trunks/my-app.trunk
 ```
 
-`trunks storage add --name primary ...` validates the backend before saving it. It writes and reads a small test object, checks listing, and writes a journal record.
-
-Trunks saves storage names and locations in `.trunks/myrepo.trunk`. If you store credentials with `trunks storage add`, they stay in that local database and are not written to the remote backend. A new sandbox can either receive credentials from its environment, CI secrets, IAM role, SSH agent, or run `trunks storage add` once for its own local profile.
-
-Check it again later with:
+Production:
 
 ```bash
-trunks storage ping primary
+trunks repo create --name my-app --backend s3://company-trunks
 ```
 
-## Use Git
+Local for development:
 
 ```bash
-echo "# hi" > README.md
-git add README.md
-git commit -m "first"
+trunks repo create --name my-app --backend local:///tmp/trunks-store
+```
+
+In-memory for tests:
+
+```bash
+trunks repo create --name my-app --backend memory://
+```
+
+See [Backends](backends/README.md) for S3, GCS, Azure, Postgres, SFTP, fileshares.
+
+## 3. Mount
+
+```bash
+trunks mount --repo my-app --path ./my-app
+cd ./my-app
+```
+
+You're in a normal folder now. `cat`, `vim`, `grep`, `npm`, `python` all work.
+
+```bash
+echo "Fix auth" > task.md
+grep -R "login" src || true
+```
+
+## 4. Save A Version
+
+```bash
+trunks checkpoint -m "agent output"
+trunks push
+```
+
+`checkpoint` writes a Git commit object. `push` syncs objects and refs to your backend. The two split exists because agents make a lot of small edits. Checkpoint locally as often as you want. Push when you're ready.
+
+## 5. Continue Somewhere Else
+
+```bash
+trunks mount --repo my-app --path ./my-app
+cd ./my-app
+trunks pull
+```
+
+Same repo name. Same storage root. Same files, including the version you pushed.
+
+## 6. Use Git If You Want
+
+```bash
+cd ./my-app
+trunks
+git checkout -b agent/run-7
+git add .
+git commit -m "agent output"
 git push
 ```
 
-The push syncs to the connected Trunks backend.
-
-No Git origin is required. If you have connected Trunks storage, `git push` writes there by default.
-
-## Add A Mirror
-
-If you want every push copied to another backend:
-
-```bash
-trunks storage add --name backup --backend s3 --bucket my-backup-bucket --mirror
-trunks storage ping backup
-```
-
-Primary storage decides whether a push is accepted. Mirrors are copied in the same push, and a mirror failure makes the Trunks push fail so you do not get a fake "synced" state.
-
-## Pull Somewhere Else
-
-```bash
-mkdir myrepo-copy && cd myrepo-copy
-trunks init --name myrepo --backend s3://my-bucket/trunks/myrepo.trunk
-trunks pull
-git log
-```
-
-That is the agent-to-agent path too. A new sandbox only needs the primary trunk URL. After `trunks pull`, it learns the storage map stored in the trunk, including mirrors, before it pushes new work.
-
-## Use It From Python
-
-```python
-from trunks import Trunk
-
-with Trunk(backend="s3://my-bucket", name="myrepo") as trunk:
-    trunk.pull()
-    print(trunk.read("README.md"))
-```
-
-That loads `s3://my-bucket/trunks/myrepo.trunk/`.
-
-## Check And Clean
-
-```bash
-trunks check
-trunks check --clean
-```
-
-`check` verifies the local repo and rebuilds Git compatibility state. `--clean` also removes unreachable local objects.
+`trunks` opens a shell where Git writes through Trunks to your backend. Same commits. Same refs. No GitHub.
 
 ## Next
 
-Read the per-backend pages in [docs/backends/](backends/) for credentials and URL formats.
+- [Lifecycle](lifecycle.md): what each command does to bytes
+- [CLI reference](cli.md): every flag
+- [Backends](backends/README.md): pick the right storage
+- [Agents](agents.md): wire it up to a framework

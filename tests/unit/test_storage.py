@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import stat
 import tempfile
@@ -8,6 +9,7 @@ import unittest
 from argparse import Namespace
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from trunks.backends.s3 import S3
 from trunks.backends.local import Local
@@ -53,6 +55,25 @@ class StorageCommandTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 os.chdir(cwd)
 
+    async def test_storage_list_json_uses_api_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                init(name="app", backend=None)
+                target = str(Path(tmp) / "remote.trunk")
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(await storage("add", "primary", target), 0)
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    self.assertEqual(await dispatch(["storage", "list", "--json"]), 0)
+                payload = json.loads(out.getvalue())
+                self.assertEqual(payload["object"], "list")
+                self.assertEqual(payload["data"][0]["object"], "storage_target")
+                self.assertEqual(payload["data"][0]["name"], "primary")
+            finally:
+                os.chdir(cwd)
+
     async def test_add_binds_current_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cwd = os.getcwd()
@@ -82,6 +103,30 @@ class StorageCommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(Repository.find().backend_url(), expected)
                 self.assertEqual(Repository.find().primary_storage_name(), "prod")
                 self.assertIn(expected, out.getvalue())
+            finally:
+                os.chdir(cwd)
+
+    async def test_one_backend_root_can_hold_multiple_repos(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote"
+            cwd = os.getcwd()
+            try:
+                for repo_name in ("app-one", "app-two"):
+                    worktree = root / repo_name
+                    worktree.mkdir()
+                    os.chdir(worktree)
+                    init(name=repo_name, backend=None)
+                    out = io.StringIO()
+                    with redirect_stdout(out):
+                        rc = await storage("add", "primary", str(remote))
+                    expected = f"{remote}/trunks/{repo_name}.trunk"
+                    self.assertEqual(rc, 0)
+                    self.assertEqual(Repository.find().backend_url(), expected)
+                    self.assertIn(expected, out.getvalue())
+
+                self.assertTrue((remote / "trunks" / "app-one.trunk").exists())
+                self.assertTrue((remote / "trunks" / "app-two.trunk").exists())
             finally:
                 os.chdir(cwd)
 
@@ -187,6 +232,29 @@ class StorageCommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(profile.settings["path"], remote)
                 self.assertEqual(repo.backend_url(), f"local://{remote}/trunks/app.trunk")
                 self.assertIn("local://", out.getvalue())
+            finally:
+                os.chdir(cwd)
+
+    async def test_storage_wizard_configures_local_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                init(name="app", backend=None)
+                remote = str(Path(tmp) / "remote")
+                answers = iter(["", "", "local", remote])
+                out = io.StringIO()
+                with patch("builtins.input", side_effect=lambda _prompt: next(answers)), redirect_stdout(out):
+                    rc = await dispatch(["storage", "wizard"])
+                self.assertEqual(rc, 0)
+                repo = Repository.find()
+                profile = repo.storage_profile("primary")
+                self.assertIsNotNone(profile)
+                assert profile is not None
+                self.assertEqual(profile.backend, "local")
+                self.assertEqual(profile.settings["path"], remote)
+                self.assertEqual(repo.backend_url(), f"local://{remote}/trunks/app.trunk")
+                self.assertIn("Trunks storage wizard", out.getvalue())
             finally:
                 os.chdir(cwd)
 

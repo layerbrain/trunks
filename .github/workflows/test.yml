@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit (ubuntu-latest, py3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e .
+      - name: Run PR unit tests
+        run: |
+          python -m unittest \
+            tests.unit.test_cli_resources \
+            tests.unit.test_python_sdk_api \
+            tests.unit.test_cli_versioning \
+            tests.unit.test_storage \
+            tests.unit.test_runtime_webhooks \
+            tests.unit.test_rpc_protocol \
+            tests.unit.test_rpc_socket \
+            tests.unit.test_cache \
+            -v

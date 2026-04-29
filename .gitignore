@@ -7,6 +7,7 @@ __pycache__/
 .venv/
 venv/
 env/
+node_modules/
 
 .pytest_cache/
 .mypy_cache/

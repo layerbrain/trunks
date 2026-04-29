@@ -14,6 +14,7 @@ from trunks.chunked import CHUNK_THRESHOLD
 from trunks.errors import BackendUnavailable
 from trunks.objects import Blob
 from tests.contract.backend import assert_backend_contract
+from tests.contract.workflow import assert_workflow_contract
 
 
 @contextmanager
@@ -94,6 +95,18 @@ class S3MinioTests(unittest.IsolatedAsyncioTestCase):
             )
             await backend.ensure_bucket()
             await assert_backend_contract(self, backend)
+
+    async def test_workflow_contract_against_minio(self) -> None:
+        with minio_server() as endpoint:
+            backend = S3(
+                bucket="trunks-workflow",
+                prefix="workflow.trunk",
+                endpoint=endpoint,
+                region="us-east-1",
+                credentials=S3Credentials("minioadmin", "minioadmin"),
+            )
+            await backend.ensure_bucket()
+            await assert_workflow_contract(self, backend)
 
     async def test_s3_batch_write_uses_segment_layout(self) -> None:
         with minio_server() as endpoint:

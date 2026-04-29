@@ -11,6 +11,7 @@ from urllib.request import urlopen
 from trunks.backends.azure import Azure
 from trunks.credentials import AzureCredentials
 from tests.contract.backend import assert_backend_contract
+from tests.contract.workflow import assert_workflow_contract
 
 AZURITE_ACCOUNT = "devstoreaccount1"
 AZURITE_KEY = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
@@ -82,6 +83,21 @@ class AzureAzuriteTests(unittest.IsolatedAsyncioTestCase):
             try:
                 await backend.ensure_container()
                 await assert_backend_contract(self, backend)
+            finally:
+                await backend.__aexit__(None, None, None)
+
+    async def test_workflow_contract_against_azurite(self) -> None:
+        with azurite_server() as (endpoint, key):
+            backend = Azure(
+                account=AZURITE_ACCOUNT,
+                container="workflow",
+                prefix="workflow.trunk",
+                endpoint=endpoint,
+                credentials=AzureCredentials(account_name=AZURITE_ACCOUNT, account_key=key),
+            )
+            try:
+                await backend.ensure_container()
+                await assert_workflow_contract(self, backend)
             finally:
                 await backend.__aexit__(None, None, None)
 

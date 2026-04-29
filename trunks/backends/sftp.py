@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse
 
@@ -87,15 +88,18 @@ class SFTP(Backend):
 
     async def list_refs(self, prefix: str = ""):
         sftp = await self._client()
-        ref_root = self._path(normalize_ref(prefix) if prefix else "refs")
-        try:
-            paths = await sftp.glob(f"{ref_root}/*/*")
-        except Exception:
-            paths = []
-        for path in sorted(str(p) for p in paths):
+        refs_root = self._path("refs")
+        normalized_prefix = normalize_ref(prefix) if prefix else "refs/"
+        files: list[str] = []
+        async for path in self._walk_files(sftp, refs_root):
+            files.append(path)
+        for path in sorted(files):
+            relative = self._relative(path)
+            if not relative.startswith(normalized_prefix):
+                continue
             raw = (await self._read(path)).decode().strip()
             if raw:
-                yield Ref(self._relative(path), ObjectId(raw))
+                yield Ref(relative, ObjectId(raw))
 
     async def append_journal(self, entry: JournalEntry) -> None:
         try:
@@ -182,3 +186,19 @@ class SFTP(Backend):
             await sftp.remove(path)
         except Exception:
             return
+
+    async def _walk_files(self, sftp, root: str):
+        if not await self._exists(root):
+            return
+        stack: list[str] = [root]
+        while stack:
+            current = stack.pop()
+            for entry in await sftp.readdir(current):
+                name = entry.filename
+                if name in {".", ".."}:
+                    continue
+                child = f"{current.rstrip('/')}/{name}"
+                if stat.S_ISDIR(entry.attrs.permissions):
+                    stack.append(child)
+                else:
+                    yield child

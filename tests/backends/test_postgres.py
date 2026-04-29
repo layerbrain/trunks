@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from trunks.backends.postgres import Postgres
 from trunks.credentials import PostgresCredentials
 from tests.contract.backend import assert_backend_contract
+from tests.contract.workflow import assert_workflow_contract
 
 
 @contextmanager
@@ -72,6 +73,20 @@ class PostgresBackendTests(unittest.IsolatedAsyncioTestCase):
                     time.sleep(0.25)
             await assert_backend_contract(self, backend)
             await backend.__aexit__(None, None, None)
+
+    async def test_workflow_contract_against_postgres(self) -> None:
+        with postgres_server() as dsn:
+            backend = Postgres(PostgresCredentials(dsn), trunk="workflow")
+            for _ in range(120):
+                try:
+                    await backend.capabilities()
+                    break
+                except Exception:
+                    time.sleep(0.25)
+            try:
+                await assert_workflow_contract(self, backend)
+            finally:
+                await backend.__aexit__(None, None, None)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 [project]
 name = "trunks"
-version = "0.1.0"
-description = "Git-compatible repositories backed by your own storage: S3, R2, Tigris, MinIO, Postgres, SFTP, local disk, NFS."
+description = "Git repos backed by your own storage. Push to S3, R2, Tigris, MinIO, Postgres, SFTP, NFS, or local disk."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+dynamic = ["version"]
 authors = [{ name = "Brain", email = "brain@layerbrain.com" }]
 keywords = ["git", "storage", "s3", "r2", "tigris", "sandbox", "agents"]
 classifiers = [
@@ -19,7 +19,14 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
     "Topic :: System :: Archiving :: Backup",
 ]
-dependencies = []
+# Fast-by-default. orjson works on every supported platform; uvloop has no
+# Windows port (asyncio.ProactorEventLoop is the floor there), so it ships
+# only on POSIX via PEP 508 marker. There is no runtime "try uvloop / fall
+# back" branch — installation alone determines availability.
+dependencies = [
+    "orjson>=3.10",
+    "uvloop>=0.19; sys_platform != 'win32'",
+]
 
 [project.urls]
 Homepage = "https://layerbrain.com/trunks"
@@ -38,11 +45,14 @@ testing = ["testcontainers"]
 trunks = "trunks.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.18,<1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["trunks"]
 
+[tool.hatch.version]
+path = "trunks/version.py"
+
 [tool.hatch.build.targets.sdist]
-include = ["trunks", "README.md", "docs/media/*.svg"]
+include = ["trunks", "README.md", "docs/**/*.md", "docs/media/*.svg", "trunks-node/**/*.ts", "trunks-node/*.json", "trunks-node/*.md", "trunks-python/*.toml", "trunks-python/*.md"]

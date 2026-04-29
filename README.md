@@ -1,176 +1,204 @@
 # Trunks
 
-Git repos backed by your own storage. Run `trunks`, keep using `git`, and pushes go to S3, R2, Tigris, MinIO, Postgres, SFTP, local disk, or a file share. GitHub still works too if you want it, as a mirror.
+The most powerful open-source POSIX-compatible, Git-native filesystem for AI agents.
 
-![Trunks storage topology](docs/media/storage.svg)
+**Trunks turns any backend into a Git-compatible remote.** Point it at S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, a fileshare, or local disk. You get branches, commits, refs, push, pull, the whole protocol. No Git server. No service to operate. No control plane. No repo copy per agent.
 
-## Use Cases
+Agents write normal files. Developers run normal Git.
 
-- Run agents in short-lived sandboxes and save their work before the sandbox is destroyed.
-- Let one agent push work and another agent pull it on a different machine.
-- Sync repo state to S3, R2, Tigris, MinIO, Postgres, SFTP, local disk, or a file share.
-- Keep customer code in your own bucket, VPC, or enterprise storage.
-- Mirror finished work to GitHub for PRs and review when you are ready.
+```bash
+git checkout -b agent/run-7
+git add .
+git commit -m "agent output"
+git push
+```
+
+That `git push` writes commit objects and advances the branch ref straight into your bucket. No GitHub. No remote URL. No server in between.
 
 ## Install
 
 ```bash
 pip install trunks
+npm install @layerbrain/trunks
 ```
 
-## 60-second start (local disk, no cloud)
+## Quick Start
 
 ```bash
-cd myrepo
-trunks init
-trunks storage add --name primary --backend local --path ~/trunks-store
+trunks mount --repo my-app --backend s3://company-trunks --path ./my-app
+```
 
-git checkout -b feature/auth
-git add . && git commit -m "fix auth"
+That's it. `./my-app` is a normal folder now. Run your agent in it. Edit code in it. `trunks push` syncs to your bucket. Another machine runs the same `mount` and sees the same files.
+
+S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
+
+## How It Works
+
+Trunks stores repos as Git-shaped objects in your backend.
+
+```text
+s3://company-trunks/trunks/my-app.trunk/
+├── objects/       blobs, trees, commits (sha-keyed, immutable)
+├── refs/heads/    branch pointers (compare-and-swap)
+└── journals/      crash recovery
+```
+
+- When an agent writes a file, Trunks hashes the bytes into objects.
+- When it checkpoints, Trunks writes a tree and a commit.
+- When it pushes, Trunks advances the branch ref with compare-and-swap.
+
+That's the whole protocol. Two writers can't clobber each other. Crashes don't corrupt state. Two machines sync by pointing at the same prefix.
+
+## Why It Exists
+
+Agents make a lot of files. Without history, every run is a coin flip. Did the agent leave you something useful, or did it stomp the last version?
+
+Git solves history. But Git expects a hosted server, a clone per worker, and has no native story for large or many repos.
+
+Trunks keeps Git's commit objects and refs, drops the server, and writes straight to storage you already use. The bucket is the remote. So is the database, or the SFTP host. Agents check out a branch, write files, save versions, and you review the diff like a normal pull request.
+
+## What You Get
+
+- **Real files.** Agents read and write with `cat`, `vim`, `grep`, `npm`, `python`. The SDKs are a convenience, not a requirement.
+- **Real Git.** Every checkpoint is a Git commit object. `git log`, `git diff`, `git blame` all work. So does `git push` through the Trunks shim.
+- **Real concurrency.** Branches are pointers. Different branches never collide. Same branch is one CAS. One writer wins, the others retry.
+- **Real backends.** S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, fileshare, local disk. Each one passes the same multi-commit, branch, merge, and CAS-conflict contract test.
+- **Real scale.** Virtual mode mounts a 100GB repo without materializing it.
+- **Real portability.** Same commands on a laptop, EC2, Lambda, Cloudflare Worker, Modal sandbox, Daytona, CI runner.
+
+## Mount Modes
+
+```bash
+trunks mount --repo my-app --path ./my-app
+trunks mount --repo my-app --path ./my-app --watch
+trunks mount --repo big-repo --path ./big-repo --mode virtual
+```
+
+Default is plain files. `--watch` keeps a journal so a crash doesn't lose work. `--mode virtual` sparsely materializes huge repos.
+
+## Branches Are Pointers
+
+One branch per agent run. Creating one is a single ref write. No copy.
+
+```bash
+trunks branch create --name agent/run-7 --from main
+trunks branch switch --name agent/run-7
+trunks checkpoint -m "agent output"
+trunks push
+```
+
+Two agents on different branches don't collide. Two agents on the same branch race a compare-and-swap. One wins. The other retries.
+
+## Git Without GitHub
+
+```bash
+cd ./my-app
+trunks
+git checkout -b agent/run-7
+git add .
+git commit -m "agent output"
 git push
 ```
 
-That push lands in `~/trunks-store/trunks/myrepo.trunk/`. No origin needed.
-
-## Cloud start (S3, R2, Tigris, MinIO)
-
-```bash
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_REGION=us-east-1
-
-cd myrepo
-trunks init
-trunks storage add --name primary --backend s3 --bucket my-bucket
-```
-
-Here is what happens:
-
-1. Trunks turns the repo name into a path: `myrepo` becomes `s3://my-bucket/trunks/myrepo.trunk`.
-2. It does a real read, write, and list on the bucket to make sure the credentials work.
-3. It saves the target locally in `.trunks/myrepo.trunk`.
-
-Credentials stay local. If you pass inline flags like `--access-key`, `--secret-key`, or `--password`, Trunks saves them only in the local `.trunks/<repo>.trunk` database, masks them in `trunks storage show`, and never writes them to the remote backend. You can also use env vars, CI secrets, IAM roles, or your SSH agent instead.
-
-Now use git like you always do:
-
-```bash
-git checkout -b feature/auth
-git add . && git commit -m "fix auth"
-git push
-```
-
-The push lands in `s3://my-bucket/trunks/myrepo.trunk/`.
-
-## Multi-machine handoff
-
-![Sandbox-to-sandbox replication via Trunks](docs/media/collab.svg)
-
-One sandbox pushes a branch. Another sandbox pulls it, keeps working, pushes back. The map of which storage holds what lives inside the trunk, so a fresh sandbox only needs the primary URL to find the mirrors.
-
-## Multiple accounts, multiple buckets
-
-Per-storage env vars beat the globals. This is how CI runs against more than one account at once:
-
-```bash
-export TRUNKS_STORAGE_PRIMARY_ACCESS_KEY=AKIA...
-export TRUNKS_STORAGE_PRIMARY_SECRET_KEY=...
-export TRUNKS_STORAGE_BACKUP_ACCESS_KEY=AKIA...    # different account
-export TRUNKS_STORAGE_BACKUP_SECRET_KEY=...
-```
-
-Each named storage looks up `TRUNKS_STORAGE_<NAME>_<KEY>` first, then falls back to the provider defaults like `AWS_*` or `R2_*`.
-
-## Mirrors
-
-Push to more than one place at the same time:
-
-```bash
-trunks storage add --name primary --backend s3  --bucket company-primary
-trunks storage add --name backup  --backend r2  --bucket company-backup --account-id $R2_ACCOUNT_ID --mirror
-trunks storage add --name nas     --backend local --path /mnt/company/trunks --mirror
-```
-
-Pushes are strict. If `backup` is down, the push fails. No silent half-syncs.
-
-## Storage health
-
-```bash
-trunks storage list
-trunks storage show primary         # masks secrets
-trunks storage ping                 # primary + mirrors
-trunks storage ping primary
-trunks storage ping s3://my-bucket  # test before saving
-```
-
-## Storage layout
-
-- Backend: the storage root, like `s3://company-code`.
-- Trunk: one repo inside that backend, like `s3://company-code/trunks/lazy-lms.trunk/`.
-
-Trunks stores git-compatible blobs, trees, commits, and refs. The on-disk layout is its own: objects are content-addressed and shared across branches, segments are batched, large blobs are chunked, every read is hash-verified. Not git LFS. GitHub can still be a mirror for review; Trunks keeps the repo data in the storage you chose.
-
-## CLI
-
-| Command | What it does |
-|---|---|
-| `trunks` | drop into the managed shell |
-| `trunks init` | create `.trunks/<repo>.trunk` locally |
-| `trunks storage add --name <name> --backend <type> ...` | connect a named primary |
-| `trunks storage add ... --mirror` | add a mirror |
-| `trunks storage list` | list the storage you have |
-| `trunks storage show <name>` | show one target with secrets masked |
-| `trunks storage ping [<name>]` | check the primary and the mirrors |
-| `trunks storage remove <name>` | drop a target |
-| `trunks status` | repo, branch, storage, mirrors, dirty state |
-| `trunks push` / `pull` / `fetch` | sync with the storage you have |
-| `trunks check [--clean]` | verify the local repo and optionally GC dead objects |
-
-Inside `trunks`, use git the normal way: `git status`, `git add`, `git commit`, `git push`.
-
-## Backends
-
-| Backend | URL form | Setup |
-|---|---|---|
-| S3 | `s3://bucket/path` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md) |
-| MinIO | `s3://bucket --endpoint http://host:9000` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#minio) |
-| Cloudflare R2 | `r2://bucket/path` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#cloudflare-r2) |
-| Tigris | `tigris://bucket` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#tigris) |
-| Backblaze B2 | `b2://bucket` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#backblaze-b2) |
-| Wasabi | `wasabi://bucket` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#wasabi) |
-| DigitalOcean Spaces | `spaces://bucket` | [docs/backends/s3.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/s3.md#digitalocean-spaces) |
-| Azure Blob | `azure://account/container/path` | [docs/backends/azure.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/azure.md) |
-| GCS | `gcs://bucket/path` | [docs/backends/gcs.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/gcs.md) |
-| SFTP | `sftp://user@host/path` | [docs/backends/sftp.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/sftp.md) |
-| Postgres | `postgres://user:pw@host/db/trunks/repo.trunk` | [docs/backends/postgres.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/postgres.md) |
-| Local disk | `local:///path/to/dir` | [docs/backends/local.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/local.md) |
-| NFS / SMB | `file:///mnt/share` | [docs/backends/local.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/local.md) |
-| Memory (tests) | `memory://` | [docs/backends/memory.md](https://github.com/layerbrain/trunks/blob/main/docs/backends/memory.md) |
+`trunks` opens a shell where `git` writes Trunks objects to your backend. Same commits. Same refs. Your storage. **No GitHub. No remote URL.**
 
 ## Python
 
+Use the Python SDK when your agent wants files and commits without shelling out.
+
 ```python
 from trunks import Trunk
 
-with Trunk(backend="s3://company-code", name="lazy-lms") as trunk:
-    trunk.pull()
-    print(trunk.read("README.md"))
+with Trunk(name="my-app") as trunk:
+    trunk.write("task.md", b"Fix auth\n")
+    trunk.commit(message="agent output")
+    trunk.push()
 ```
-
-Async works too. The methods notice a running event loop and pick sync or async on their own:
 
 ```python
-import asyncio
-from trunks import Trunk
-
-async def serve_file(path: str) -> bytes:
-    async with Trunk(backend="s3://company-code", name="lazy-lms") as trunk:
-        await trunk.pull()
-        return await trunk.read(path)
-
-asyncio.run(serve_file("README.md"))
+async with Trunk(name="my-app") as trunk:
+    await trunk.write("task.md", b"Fix auth\n")
+    await trunk.commit(message="agent output")
+    await trunk.push()
 ```
 
-## License
+## Node
 
-MIT.
+```ts
+import { Trunks } from "@layerbrain/trunks";
+
+const trunks = new Trunks();
+const fs = await trunks.mount({ repo: "my-app", path: "./my-app", watch: true });
+
+await fs.write("task.md", "Fix auth\n");
+await fs.checkpoint("agent output");
+await fs.push();
+```
+
+## Resource API
+
+CLI, Python, and Node share a Stripe-shaped API.
+
+```bash
+trunks repo create --name my-app --backend s3://company-trunks --json
+trunks branch list --json --limit 20 --offset 0
+```
+
+```python
+client = Trunks(cwd="./my-app")
+client.branches.create(name="agent/run-7", from_ref="main")
+```
+
+```ts
+const trunks = new Trunks();
+await trunks.branches.create({ name: "agent/run-7", from: "main" });
+```
+
+List calls return the same envelope everywhere:
+
+```json
+{
+  "object": "list",
+  "data": [],
+  "limit": 20,
+  "offset": 0,
+  "total_count": 0,
+  "has_more": false
+}
+```
+
+## Where To Next
+
+| Want to do | Page |
+|---|---|
+| Walk through your first repo | [Tutorial](docs/tutorial.md) |
+| See every command | [CLI reference](docs/cli.md) |
+| Use Python | [Python SDK](docs/sdk-python.md) |
+| Use Node | [Node SDK](docs/sdk-node.md) |
+| Resource shapes | [Resources](docs/resources.md) |
+| Pick a backend | [Backends](docs/backends/README.md) |
+| Wire up an agent framework | [Agents](docs/agents.md) |
+| Understand the bytes | [Architecture](docs/architecture.md) |
+
+Backend guides:
+
+- [S3-compatible storage](docs/backends/s3.md)
+- [Azure Blob Storage](docs/backends/azure.md)
+- [Google Cloud Storage](docs/backends/gcs.md)
+- [Postgres](docs/backends/postgres.md)
+- [SFTP](docs/backends/sftp.md)
+- [Local disk and fileshares](docs/backends/local.md)
+
+Examples:
+
+- [Mastra](examples/mastra-pr-agent/README.md)
+- [OpenAI Agents SDK](examples/openai-agents-pr-agent/README.md)
+- [LangChain / LangGraph](examples/langchain-pr-agent/README.md)
+- [CrewAI](examples/crewai-pr-agent/README.md)
+- [Pydantic AI](examples/pydantic-ai-pr-agent/README.md)
+- [Agno](examples/agno-pr-agent/README.md)
+- [E2B](examples/e2b-sandbox/README.md)
+- [Daytona](examples/daytona-sandbox/README.md)
+- [Blaxel](examples/blaxel-sandbox/README.md)
+
+MIT licensed.
