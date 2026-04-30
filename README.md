@@ -137,7 +137,7 @@ await fs.push();
 
 ## Resource API
 
-CLI, Python, and Node share a Stripe-shaped API.
+CLI, Python, and Node share the same resource API.
 
 ```bash
 trunks repo create --name my-app --backend s3://company-trunks --json

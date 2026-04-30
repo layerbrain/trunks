@@ -253,7 +253,7 @@ test("repos.list parses API list resources", async () => {
   assert.equal(repos.data[0].storage[0].object, "storage_target");
 });
 
-test("repos CRUD methods pass Stripe-style CLI resource commands", async () => {
+test("repos CRUD methods pass CLI resource commands", async () => {
   const dir = makeTmp("trunks-bin-");
   const argLog = join(dir, "args.log");
   const fakeBin = makeFakeBin(

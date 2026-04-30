@@ -58,7 +58,7 @@ trunk.fetch()
 
 ## Resource API
 
-The Stripe-shaped client for repos, branches, tags, storage, webhooks, audit:
+The resource client for repos, branches, tags, storage, webhooks, audit:
 
 ```python
 from trunks import Trunks
