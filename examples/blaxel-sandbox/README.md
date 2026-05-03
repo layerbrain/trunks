@@ -20,6 +20,7 @@ trunks pull
 
 ```bash
 trunks diff --vs main
-trunks checkpoint -m "agent output"
-trunks push
+git add .
+git commit -m "agent output"
+git push
 ```

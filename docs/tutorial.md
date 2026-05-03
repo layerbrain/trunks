@@ -61,11 +61,12 @@ grep -R "login" src || true
 ## 4. Save A Version
 
 ```bash
-trunks checkpoint -m "update auth"
-trunks push
+git add .
+git commit -m "update auth"
+git push
 ```
 
-`checkpoint` writes a Git commit object. `push` syncs objects and refs to your backend. The two split exists because workloads can make a lot of small edits. Checkpoint locally as often as you want. Push when you're ready.
+`git commit` writes a real Git commit object through Trunks. `git push` syncs objects and refs to your backend. The split exists because workloads can make a lot of small edits. Commit locally as often as you want. Push when you're ready.
 
 ## 5. Continue Somewhere Else
 

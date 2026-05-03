@@ -19,7 +19,7 @@ from trunks.credentials import SFTPCredentials
 @contextmanager
 def sftp_server():
     if subprocess.run(["docker", "--version"], capture_output=True).returncode != 0:
-        raise unittest.SkipTest("docker is not available")
+        raise RuntimeError("docker is required to run SFTP backend tests")
     with TemporaryDirectory() as tmp:
         key = Path(tmp) / "id_ed25519"
         keygen = subprocess.run(
@@ -28,7 +28,7 @@ def sftp_server():
             text=True,
         )
         if keygen.returncode != 0:
-            raise unittest.SkipTest(f"could not generate SSH key: {keygen.stderr.strip()}")
+            raise RuntimeError(f"could not generate SSH key: {keygen.stderr.strip()}")
         name = f"trunks-sftp-{os.getpid()}-{int(time.time())}"
         run = subprocess.run(
             [
@@ -49,7 +49,7 @@ def sftp_server():
             text=True,
         )
         if run.returncode != 0:
-            raise unittest.SkipTest(f"could not start SFTP: {run.stderr.strip()}")
+            raise RuntimeError(f"could not start SFTP: {run.stderr.strip()}")
         try:
             port = ""
             for _ in range(80):
@@ -76,8 +76,6 @@ def sftp_server():
 
 class SFTPBackendTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        if os.environ.get("TRUNKS_DOCKER_TESTS") != "1":
-            raise unittest.SkipTest("set TRUNKS_DOCKER_TESTS=1 to run Docker backend tests")
         asyncio.get_running_loop().slow_callback_duration = 60
 
     async def test_sftp_backend_contract(self) -> None:

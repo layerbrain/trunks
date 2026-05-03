@@ -28,6 +28,15 @@ Each example exposes the same Trunks tools:
 |---|---|
 | E2B | [e2b-sandbox](e2b-sandbox/README.md) |
 | Daytona | [daytona-sandbox](daytona-sandbox/README.md) |
+| DigitalOcean | [digitalocean-sandbox](digitalocean-sandbox/README.md) |
 | Blaxel | [blaxel-sandbox](blaxel-sandbox/README.md) |
 
 Mount Trunks where commands execute. If shell commands run in a sandbox, mount inside the sandbox.
+
+## Actions
+
+| Example | Directory |
+|---|---|
+| Headless CI runner | [actions](actions/README.md) |
+
+Normal CI starts from `git push`. The Actions example is for apps and agents that want to queue work directly.

@@ -160,6 +160,12 @@ async def dispatch(argv: list[str]) -> int:
     history_p = sub.add_parser("history", help="show refs and commit graph")
     history_p.add_argument("--json", action="store_true")
 
+    actions_p = sub.add_parser("actions", help="run Trunks Actions workflows and jobs")
+    actions_p.add_argument("module_args", nargs=argparse.REMAINDER)
+
+    sandboxes_p = sub.add_parser("sandboxes", help="inspect sandbox providers")
+    sandboxes_p.add_argument("module_args", nargs=argparse.REMAINDER)
+
     diff_p = sub.add_parser("diff", help="show file changes between refs or the worktree")
     diff_p.add_argument("--from", dest="from_ref", default=None)
     diff_p.add_argument("--vs", default=None)
@@ -266,6 +272,14 @@ async def dispatch(argv: list[str]) -> int:
             return await log(json_output=args.json)
         if args.command == "history":
             return history(json_output=args.json)
+        if args.command == "actions":
+            from .actions.cli import dispatch as actions_dispatch
+
+            return await actions_dispatch(args.module_args)
+        if args.command == "sandboxes":
+            from .sandboxes.cli import dispatch as sandboxes_dispatch
+
+            return await sandboxes_dispatch(args.module_args)
         if args.command == "diff":
             return cmd_diff(from_ref=args.from_ref, vs=args.vs, json_output=args.json)
         if args.command == "add":

@@ -38,8 +38,9 @@ cd ./my-app
 trunks pull
 echo "Fix auth" > task.md
 trunks diff --vs main
-trunks checkpoint -m "update auth"
-trunks push
+git add .
+git commit -m "update auth"
+git push
 ```
 
 ## Node Shape

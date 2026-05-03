@@ -117,6 +117,10 @@ class Engine:
         }
         audit.record(self.repository, "push", push_payload)
         await webhooks.emit(self.repository, "push", push_payload)
+        if result.refs_pushed:
+            from .actions.triggers import run_push_workflows
+
+            await run_push_workflows(self.repository, commit=str(push_payload["head"]))
         return result
 
     async def log(self, *, branch: str | None = None, limit: int = 50) -> AsyncIterator[Commit]:

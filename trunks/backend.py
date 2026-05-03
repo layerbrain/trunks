@@ -58,6 +58,12 @@ class Backend(ABC):
     @abstractmethod
     async def cas_ref(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool: ...
 
+    async def delete_ref(self, name: str) -> None:
+        raise NotImplementedError("backend does not support ref deletion")
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        raise NotImplementedError("backend does not support object deletion")
+
     @abstractmethod
     def list_refs(self, prefix: str = "") -> AsyncIterator[Ref]: ...
 

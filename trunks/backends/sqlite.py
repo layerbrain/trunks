@@ -60,6 +60,20 @@ class SQLite(Backend):
     async def cas_ref(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool:
         return await asyncio.to_thread(self._cas_ref_sync, normalize_ref(name), expected, new)
 
+    async def delete_ref(self, name: str) -> None:
+        await asyncio.to_thread(
+            self._execute,
+            "delete from trunks_refs where trunk = ? and name = ?",
+            (self.trunk, normalize_ref(name)),
+        )
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        await asyncio.to_thread(
+            self._execute,
+            "delete from trunks_objects where trunk = ? and oid = ?",
+            (self.trunk, str(oid)),
+        )
+
     async def list_refs(self, prefix: str = "") -> AsyncIterator[Ref]:
         normalized_prefix = normalize_ref(prefix) if prefix else ""
         rows = await asyncio.to_thread(
@@ -140,6 +154,7 @@ class SQLite(Backend):
 
     def _cas_ref_sync(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool:
         with self._connect() as conn:
+            conn.execute("begin immediate")
             row = conn.execute(
                 "select oid from trunks_refs where trunk = ? and name = ?",
                 (self.trunk, name),

@@ -30,6 +30,7 @@ from .objects import (
 from .paths import is_ignored, is_internal_path, normalize_path
 from .refs import branch_name, normalize_ref
 from .session import ChangedFile
+from .sandboxes.profile import SandboxProviderProfile
 from .storage import Storage
 
 
@@ -154,6 +155,13 @@ class Repository:
                 name text primary key,
                 role text not null,
                 backend text not null,
+                data text not null
+            );
+            create table if not exists sandbox_providers(
+                name text primary key,
+                type text not null,
+                priority integer not null default 100,
+                enabled integer not null default 1,
                 data text not null
             );
             """
@@ -404,6 +412,44 @@ class Repository:
     def remove_storage_profile(self, name: str) -> None:
         with self._connect() as conn:
             conn.execute("delete from storages where name = ?", (name,))
+
+    def set_sandbox_provider_profile(self, profile: SandboxProviderProfile) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "insert into sandbox_providers(name, type, priority, enabled, data) "
+                "values (?, ?, ?, ?, ?) "
+                "on conflict(name) do update set "
+                "type = excluded.type, priority = excluded.priority, "
+                "enabled = excluded.enabled, data = excluded.data",
+                (
+                    profile.name,
+                    profile.type,
+                    profile.priority,
+                    1 if profile.enabled else 0,
+                    json.dumps(profile.to_record(), sort_keys=True),
+                ),
+            )
+
+    def sandbox_provider_profile(self, name: str) -> SandboxProviderProfile | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "select data from sandbox_providers where name = ?", (name,)
+            ).fetchone()
+        if row is None:
+            return None
+        return SandboxProviderProfile.from_record(json.loads(row["data"]))
+
+    def list_sandbox_provider_profiles(self) -> list[SandboxProviderProfile]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "select data from sandbox_providers order by priority asc, name asc"
+            ).fetchall()
+        return [SandboxProviderProfile.from_record(json.loads(row["data"])) for row in rows]
+
+    def remove_sandbox_provider_profile(self, name: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute("delete from sandbox_providers where name = ?", (name,))
+            return cursor.rowcount > 0
 
     def write_file(self, path: str, data: bytes, *, branch: str | None = None) -> None:
         normalized = self._normalize_trackable_path(path)
@@ -764,6 +810,20 @@ class Repository:
                 "insert into refs(name, oid) values (?, ?) on conflict(name) do update set oid = excluded.oid",
                 (normalize_ref(name), str(oid)),
             )
+
+    def cas_ref(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool:
+        normalized = normalize_ref(name)
+        with self._connect() as conn:
+            conn.execute("begin immediate")
+            row = conn.execute("select oid from refs where name = ?", (normalized,)).fetchone()
+            current = ObjectId(row["oid"]) if row else None
+            if current != expected:
+                return False
+            if row is None:
+                conn.execute("insert into refs(name, oid) values (?, ?)", (normalized, str(new)))
+            else:
+                conn.execute("update refs set oid = ? where name = ?", (str(new), normalized))
+            return True
 
     def delete_ref(self, name: str) -> None:
         with self._connect() as conn:

@@ -153,6 +153,64 @@ async def _call(repo: Repository, method: str, params: JSON) -> JSON | list[JSON
         async with Trunk(name=repo.name) as trunk:
             await trunk.pull()
         return {"ok": True}
+    if method == "actions.enqueue":
+        from .actions.run import enqueue_command
+
+        run = enqueue_command(
+            repo,
+            _command_param(params),
+            commit=_string(params, "commit", default="worktree", required=False) or "worktree",
+            timeout_s=_int(params, "timeoutS", default=30 * 60),
+            provider_id=_optional_string(params, "provider"),
+            strict_provider=bool(params.get("strictProvider", False)),
+            region=_optional_string(params, "region"),
+            spec=_actions_spec(params),
+            artifact_paths=_string_tuple(params, "artifacts"),
+            isolation=_optional_string(params, "isolation") or "process",  # type: ignore[arg-type]
+        )
+        return run.to_dict()
+    if method == "actions.execute":
+        from .actions.executor import execute_once_async
+
+        return await execute_once_async(
+            repo,
+            executor=_string(params, "executor", default="executor", required=False) or "executor",
+            provider_id=_optional_string(params, "provider"),
+            region=_optional_string(params, "region"),
+            run_id=_optional_string(params, "run"),
+            cwd=_optional_string(params, "cwd"),
+        )
+    if method == "actions.get":
+        from .actions.storage import load_run
+
+        return load_run(repo, _string(params, "run"))
+    if method == "actions.list":
+        from .actions.storage import list_runs
+
+        return list_runs(
+            repo,
+            status=_optional_string(params, "status"),
+            limit=_int(params, "limit", default=50),
+            offset=_int(params, "offset", default=0),
+        )
+    if method == "actions.cancel":
+        from .actions.storage import cancel_run
+
+        return cancel_run(repo, _string(params, "run"))
+    if method == "actions.health":
+        from .actions.health import provider_health_snapshot
+
+        return provider_health_snapshot(repo)
+    if method == "actions.oidc.token":
+        from .actions.oidc import mint_oidc_token
+
+        return mint_oidc_token(
+            repo,
+            run=_string(params, "run"),
+            audience=_string(params, "audience"),
+            issuer=_string(params, "issuer", default="https://trunks.local", required=False) or "https://trunks.local",
+            ttl_s=_int(params, "ttlS", default=600),
+        )
     if method == "daemon.shutdown":
         return {"shutdown": True}
     raise RpcError(METHOD_NOT_FOUND, f"unknown method: {method}")
@@ -318,6 +376,64 @@ def _string(params: JSON, key: str, *, default: str | None = None, required: boo
     if value is None and not required and default is None:
         return ""
     raise RpcError(INVALID_PARAMS, f"{key} must be a string")
+
+
+def _optional_string(params: JSON, key: str) -> str | None:
+    value = params.get(key)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise RpcError(INVALID_PARAMS, f"{key} must be a string")
+
+
+def _int(params: JSON, key: str, *, default: int) -> int:
+    value = params.get(key, default)
+    if isinstance(value, int):
+        return value
+    raise RpcError(INVALID_PARAMS, f"{key} must be an integer")
+
+
+def _string_tuple(params: JSON, key: str) -> tuple[str, ...]:
+    value = params.get(key, ())
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return tuple(value)
+    if value in (None, ()):
+        return ()
+    raise RpcError(INVALID_PARAMS, f"{key} must be a list of strings")
+
+
+def _command_param(params: JSON) -> str | list[str]:
+    value = params.get("command")
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    raise RpcError(INVALID_PARAMS, "command must be a string or list of strings")
+
+
+def _actions_spec(params: JSON):
+    if not any(key in params for key in ("cpu", "memoryGib", "diskGib", "arch", "gpuKind", "network")):
+        return None
+    from .sandboxes import GPU, Spec
+
+    gpu_kind = _optional_string(params, "gpuKind")
+    gpu = None if gpu_kind is None else GPU(kind=gpu_kind, count=_int(params, "gpuCount", default=1))
+    return Spec(
+        cpu=_int(params, "cpu", default=1),
+        memory_gib=_int(params, "memoryGib", default=1),
+        disk_gib=_int(params, "diskGib", default=1),
+        arch=_optional_string(params, "arch") or _host_arch(),  # type: ignore[arg-type]
+        gpu=gpu,
+        network=_optional_string(params, "network") or "default",  # type: ignore[arg-type]
+    )
+
+
+def _host_arch() -> str:
+    machine = os.uname().machine.lower() if hasattr(os, "uname") else ""
+    if machine in {"arm64", "aarch64"}:
+        return "arm64"
+    return "x86_64"
 
 
 def _bytes(params: JSON) -> bytes:

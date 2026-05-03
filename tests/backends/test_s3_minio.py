@@ -21,7 +21,7 @@ from tests.contract.workflow import assert_workflow_contract
 def minio_server():
     docker = subprocess.run(["docker", "--version"], capture_output=True, text=True)
     if docker.returncode != 0:
-        raise unittest.SkipTest("docker is not available")
+        raise RuntimeError("docker is required to run MinIO backend tests")
 
     name = f"trunks-minio-{os.getpid()}-{int(time.time())}"
     run = subprocess.run(
@@ -48,7 +48,7 @@ def minio_server():
         text=True,
     )
     if run.returncode != 0:
-        raise unittest.SkipTest(f"could not start MinIO: {run.stderr.strip()}")
+        raise RuntimeError(f"could not start MinIO: {run.stderr.strip()}")
 
     try:
         port = ""
@@ -80,8 +80,6 @@ def minio_server():
 
 class S3MinioTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        if os.environ.get("TRUNKS_DOCKER_TESTS") != "1":
-            raise unittest.SkipTest("set TRUNKS_DOCKER_TESTS=1 to run Docker backend tests")
         asyncio.get_running_loop().slow_callback_duration = 60
 
     async def test_s3_backend_contract_against_minio(self) -> None:

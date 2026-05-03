@@ -94,6 +94,22 @@ class Postgres(Backend):
                 )
                 return True
 
+    async def delete_ref(self, name: str) -> None:
+        pool = await self._pool_or_open()
+        await pool.execute(
+            "delete from trunks_refs where trunk = $1 and name = $2",
+            self.trunk,
+            normalize_ref(name),
+        )
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        pool = await self._pool_or_open()
+        await pool.execute(
+            "delete from trunks_objects where trunk = $1 and oid = $2",
+            self.trunk,
+            str(oid),
+        )
+
     async def list_refs(self, prefix: str = "") -> AsyncIterator[Ref]:
         normalized_prefix = normalize_ref(prefix) if prefix else ""
         pool = await self._pool_or_open()
