@@ -12,6 +12,7 @@ trunks --version
 trunks storage wizard
 trunks storage create --name primary --url s3://company-trunks
 trunks storage create --name primary --url local:///tmp/trunks-store
+trunks storage create --name backup --mirror --url s3://company-trunks-backup
 trunks storage ping primary
 trunks storage list --json --limit 20 --offset 0
 trunks storage get --name primary --json
@@ -19,7 +20,18 @@ trunks storage update --name primary --url s3://company-trunks-2 --json
 trunks storage delete --name primary --json
 ```
 
-Storage commands configure where repo names sync.
+Storage commands configure named backend profiles. Git remotes use those names with `trunks://<storage>/<repo>`. A primary profile plus explicit mirror profiles writes through a strict multi-backend path; inline `trunks+<scheme>://...` URLs target one backend.
+
+## Git Remote Helper
+
+```bash
+git remote add origin trunks://primary/my-app
+git push -u origin main
+git clone trunks://primary/my-app ./my-app-copy
+git remote add backup trunks+s3://company-trunks-backup/trunks/my-app.trunk
+```
+
+`git-remote-trunks` is installed with the Python package. Git invokes it automatically for `trunks://` and `trunks+...://` remotes. Real Git owns `.git`; Trunks does not install a global `git` wrapper for this path.
 
 ## Repos
 

@@ -28,6 +28,7 @@ DAYTONA_API_KEY=... scripts/verify-sandbox-provider.sh --name daytona --live
 | Repo state | Run outside a Trunks repo | Ad hoc run succeeds; repo-reading commands fail cleanly | `tests/actions/test_adversarial_edges.py` |
 | Repo isolation | Multiple repos in one process | Executor only sees and mutates its own repo | `tests/actions/test_run_lifecycle.py` |
 | Lifecycle boundary | Branch push starts `.trunks/workflows/*` with `on: push` | Git-compatible push behaves like CI/CD trigger, while Actions refs stay isolated under the Actions namespace | `tests/actions/test_lifecycle_boundaries.py`, `tests/unit/test_cli_gitshim.py` |
+| Remote helper | `git push` and `git clone` through `trunks://...` | Git invokes `git-remote-trunks`; real `.git` remains owned by Git; CAS rejects non-fast-forward pushes; force push, tags, delete, mirrors, and push trigger refs work | `tests/remote_helper/test_protocol.py`, `tests/remote_helper/test_round_trip.py` |
 | Backend CAS | Concurrent writers on the same ref | Exactly one writer advances the ref | `tests/contract/backend.py` |
 | Backend CAS | Concurrent writers on different refs | Independent refs advance without blocking each other | `tests/contract/backend.py` |
 | Queueing | Two executors race for the same run | CAS lease allows exactly one executor | `tests/actions/test_run_lifecycle.py` |

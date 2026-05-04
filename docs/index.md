@@ -10,13 +10,15 @@ Applications write normal files. Developers run normal Git.
 pip install trunks
 npm install @layerbrain/trunks
 
-trunks repo create --name my-app --backend s3://company-trunks
-trunks mount --repo my-app --path ./my-app
-cd ./my-app
+mkdir my-app && cd my-app
+git init --initial-branch=main
+trunks init --name my-app
+trunks storage add primary --backend s3 --bucket company-trunks
+git remote add origin trunks://primary/my-app
 echo "Fix auth" > task.md
 git add .
 git commit -m "update auth"
-git push
+git push -u origin main
 ```
 
 [Get started](tutorial.md){ .md-button .md-button--primary }
@@ -42,11 +44,13 @@ git push
 | Concept | Meaning |
 |---|---|
 | Repo name | Stable identity. `my-app`. |
+| Storage profile | Named backend config. `primary`. |
 | Storage root | Where bytes live. `s3://company-trunks`. |
 | Derived trunk | `s3://company-trunks/trunks/my-app.trunk`. |
 | Checkpoint | A real Git commit object. |
 | Branch | A ref pointer. Use one per task. |
 | CAS | Compare-and-swap on ref updates. Two writers can't clobber. |
+| Remote helper | `git-remote-trunks`, invoked by Git for `trunks://...` remotes. |
 
 ## Docs
 

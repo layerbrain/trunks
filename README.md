@@ -7,14 +7,11 @@ The most powerful open-source POSIX-compatible, Git-native filesystem.
 Applications write normal files. Developers run normal Git.
 
 ```bash
-trunks shell
-git checkout -b feature/auth
-git add .
-git commit -m "update auth"
-git push
+git remote add origin trunks://primary/my-app
+git push -u origin main
 ```
 
-That `git push` writes commit objects and advances the branch ref straight into your bucket. No GitHub. No remote URL. No server in between.
+That `git push` invokes `git-remote-trunks`, writes commit objects, and advances the branch ref straight into your configured storage. No GitHub. No Git server in between.
 
 ## Install
 
@@ -26,16 +23,25 @@ npm install @layerbrain/trunks
 ## Quick Start
 
 ```bash
-trunks mount --repo my-app --backend s3://company-trunks --path ./my-app
+mkdir my-app
+cd my-app
+git init --initial-branch=main
+trunks init --name my-app
+trunks storage add primary --backend local --path /tmp/trunks-store
+git remote add origin trunks://primary/my-app
+echo "hello" > README.md
+git add README.md
+git commit -m "init"
+git push -u origin main
 ```
 
-That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. Run `trunks shell` when you want Git commands to sync through Trunks. Another machine runs the same `mount` and sees the same files.
+That's it. `origin` is a normal Git remote backed by Trunks storage. Another machine can run `git clone trunks://primary/my-app`.
 
 S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
 
 ## How It Works
 
-Trunks stores repos as Git-shaped objects in your backend.
+Trunks stores repos as Git-shaped objects in your backend. Real Git owns `.git`; Trunks only participates when Git invokes `git-remote-trunks` for a `trunks://` remote.
 
 ```text
 s3://company-trunks/trunks/my-app.trunk/
@@ -45,8 +51,8 @@ s3://company-trunks/trunks/my-app.trunk/
 ```
 
 - When a process writes a file, Trunks hashes the bytes into objects.
-- When it checkpoints, Trunks writes a tree and a commit.
-- When it pushes, Trunks advances the branch ref with compare-and-swap.
+- When Git pushes, the remote helper uploads missing objects.
+- When the push completes, Trunks advances the branch ref with compare-and-swap.
 
 That's the whole protocol. Two writers can't clobber each other. Crashes don't corrupt state. Two machines sync by pointing at the same prefix.
 
@@ -61,7 +67,7 @@ Trunks keeps Git's commit objects and refs, drops the server, and writes straigh
 ## What You Get
 
 - **Real files.** Tools read and write with `cat`, `vim`, `grep`, `npm`, `python`. The SDKs are a convenience, not a requirement.
-- **Real Git.** Every checkpoint is a Git commit object. Inside `trunks shell`, `git log`, `git diff`, `git blame`, and `git push` operate on the Trunks repo.
+- **Real Git.** `git log`, `git diff`, `git blame`, `git push`, and `git clone trunks://...` operate through Git's standard remote-helper protocol.
 - **Real concurrency.** Branches are pointers. Different branches never collide. Same branch is one CAS. One writer wins, the others retry.
 - **Real backends.** S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, fileshare, local disk. Each one passes the same multi-commit, branch, merge, and CAS-conflict contract test.
 - **Real scale.** Virtual mode mounts a 100GB repo without materializing it.
@@ -95,15 +101,24 @@ Two writers on different branches don't collide. Two writers on the same branch 
 ## Git Without GitHub
 
 ```bash
-cd ./my-app
-trunks
-git checkout -b feature/auth
-git add .
-git commit -m "update auth"
-git push
+git remote add origin trunks://primary/my-app
+git push -u origin main
+git clone trunks://primary/my-app ./my-app-copy
 ```
 
-`trunks` opens a shell where `git` writes Trunks objects to your backend. Same commits. Same refs. Your storage. **No GitHub. No remote URL.**
+`trunks://primary/my-app` resolves the configured `primary` storage profile and the `my-app` repo namespace. Same commits. Same refs. Your storage.
+
+## Mirrors
+
+Add one primary storage profile and any number of explicit mirrors:
+
+```bash
+trunks storage add primary --backend s3 --bucket company-trunks
+trunks storage add backup --mirror --backend s3 --bucket company-trunks-backup
+git push origin main
+```
+
+Pushes to `trunks://primary/<repo>` write through a strict multi-backend path. The primary ref update is CAS-fenced, and configured mirrors receive the same objects, branch refs, and push trigger refs. Inline URLs such as `trunks+s3://bucket/path` target only that one backend.
 
 ## Python
 

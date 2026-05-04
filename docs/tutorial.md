@@ -27,69 +27,61 @@ actual:  s3://company-trunks/trunks/my-app.trunk
 Production:
 
 ```bash
-trunks repo create --name my-app --backend s3://company-trunks
+mkdir my-app
+cd my-app
+git init --initial-branch=main
+trunks init --name my-app
+trunks storage add primary --backend s3 --bucket company-trunks
 ```
 
 Local for development:
 
 ```bash
-trunks repo create --name my-app --backend local:///tmp/trunks-store
-```
-
-In-memory for tests:
-
-```bash
-trunks repo create --name my-app --backend memory://
+trunks storage add primary --backend local --path /tmp/trunks-store
 ```
 
 See [Backends](backends/README.md) for S3, GCS, Azure, Postgres, SFTP, fileshares.
 
-## 3. Mount
+## 3. Add A Git Remote
 
 ```bash
-trunks mount --repo my-app --path ./my-app
-cd ./my-app
+git remote add origin trunks://primary/my-app
 ```
 
-You're in a normal folder now. `cat`, `vim`, `grep`, `npm`, `python` all work.
+`trunks://primary/my-app` resolves the configured `primary` storage profile and the `my-app` repo namespace. Real Git owns `.git`; Trunks only runs when Git invokes the remote helper for this URL.
+
+## 4. Edit
 
 ```bash
 echo "Fix auth" > task.md
 grep -R "login" src || true
 ```
 
-## 4. Save A Version
+## 5. Save A Version
 
 ```bash
 git add .
 git commit -m "update auth"
-git push
+git push -u origin main
 ```
 
-`git commit` writes a real Git commit object through Trunks. `git push` syncs objects and refs to your backend. The split exists because workloads can make a lot of small edits. Commit locally as often as you want. Push when you're ready.
+`git commit` is normal Git. `git push` invokes `git-remote-trunks`, uploads missing objects, advances the backend ref with compare-and-swap, and writes a durable push trigger ref for Trunks Actions.
 
-## 5. Continue Somewhere Else
+## 6. Continue Somewhere Else
 
 ```bash
-trunks mount --repo my-app --path ./my-app
-cd ./my-app
-trunks pull
+git clone trunks://primary/my-app ./my-app-copy
 ```
 
 Same repo name. Same storage root. Same files, including the version you pushed.
 
-## 6. Use Git If You Want
+## 7. Add A Mirror
 
 ```bash
-cd ./my-app
-trunks
-git checkout -b feature/auth
-git add .
-git commit -m "update auth"
-git push
+trunks storage add backup --mirror --backend s3 --bucket company-trunks-backup
 ```
 
-`trunks` opens a shell where Git writes through Trunks to your backend. Same commits. Same refs. No GitHub.
+Pushes to `trunks://primary/my-app` now use a strict multi-backend path: the primary ref update is CAS-fenced, and configured mirrors receive the same objects, branch refs, and push trigger refs.
 
 ## Next
 

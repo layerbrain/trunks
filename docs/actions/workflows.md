@@ -13,7 +13,7 @@ jobs:
       - run: python3.12 -m unittest
 ```
 
-`git push` inside `trunks shell` publishes the commit closure to storage and starts every workflow whose `on:` matches.
+Trunks-managed `git push` publishes the commit closure to storage and starts every workflow whose `on:` matches. Remote-helper pushes to `trunks://...` write durable push trigger refs in storage; daemon pickup for those trigger refs is the storage-side Actions path.
 
 ## What's supported
 
@@ -50,7 +50,6 @@ Override unsupported `uses:` with `--accept-best-effort` to make Trunks treat th
 ```bash
 trunks actions migrate .github/workflows/ci.yml
 trunks actions workflows lint --json
-trunks shell
 git add .trunks/workflows
 git commit -m "Move CI to Trunks"
 git push
@@ -80,4 +79,4 @@ trunks actions workflow-runs --id <id> logs --json
 trunks actions run <workflow-name> --json
 ```
 
-Trigger sources: post-commit, `git push`, CLI, SDK. External forge webhooks (GitHub, GitLab) are not yet supported.
+Trigger sources: post-commit, Trunks-managed `git push`, remote-helper push trigger refs, CLI, SDK. External forge webhooks (GitHub, GitLab) are not yet supported.

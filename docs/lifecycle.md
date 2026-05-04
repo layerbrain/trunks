@@ -52,11 +52,10 @@ Checkpoint is local. Nothing has gone over the network yet.
 ## 4. Push
 
 ```bash
-trunks shell
 git push
 ```
 
-When `git push` runs inside `trunks shell`, Trunks uploads missing objects and advances the backend ref with compare-and-swap.
+When `origin` is a `trunks://...` remote, Git invokes `git-remote-trunks`. The helper uploads missing objects and advances the backend ref with compare-and-swap.
 
 ```text
 local objects → backend objects   (one PUT per missing blob/tree/commit)
@@ -76,7 +75,9 @@ Trunks never advances a backend branch by blind overwrite. Every backend impleme
 
 The contract runs against memory, local disk, fileshare, SQLite, S3-compatible storage, Postgres, GCS, Azure Blob, and SFTP. Object-store and SFTP backends use lock objects for the short ref-update section; SQL backends use database transactions or advisory transaction locks.
 
-Actions run refs are a separate namespace in the same storage. A `git push` starts matching `.trunks/workflows/*` files with `on: push`; queued runs, leases, logs, artifacts, capacity, and indexes are CAS-fenced under `refs/actions/repos/<repo>/...`.
+Named primary storage can have explicit mirror profiles. Pushes to `trunks://primary/<repo>` write through the same strict multi-backend path: the primary ref CAS gates the push, then mirrors receive objects, branch refs, and push trigger refs. Inline URLs such as `trunks+s3://bucket/path` target only that one backend.
+
+Actions run refs are a separate namespace in the same storage. A Trunks-managed `git push` starts matching `.trunks/workflows/*` files with `on: push`; remote-helper pushes write durable trigger refs under `refs/actions/repos/<repo>/triggers/push/...` for the storage-side daemon path. Queued runs, leases, logs, artifacts, capacity, and indexes are CAS-fenced under `refs/actions/repos/<repo>/...`.
 
 ## 5. Pull
 
