@@ -179,7 +179,7 @@ jobs:
             with self.assertRaises(WorkflowError):
                 parse_workflow(path, root=root)
             workflow = parse_workflow(path, root=root, oidc_enabled=True)
-            self.assertEqual(workflow.triggers, ("workflow_dispatch",))
+            self.assertIn("workflow_dispatch", workflow.triggers)
 
     def test_unsupported_uses_fail_closed_unless_best_effort(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

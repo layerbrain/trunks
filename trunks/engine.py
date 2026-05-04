@@ -120,7 +120,7 @@ class Engine:
         if result.refs_pushed:
             from .actions.triggers import run_push_workflows
 
-            await run_push_workflows(self.repository, commit=str(push_payload["head"]))
+            await run_push_workflows(self.repository, commit=str(push_payload["head"]), branch=push_payload["branch"])
         return result
 
     async def log(self, *, branch: str | None = None, limit: int = 50) -> AsyncIterator[Commit]:

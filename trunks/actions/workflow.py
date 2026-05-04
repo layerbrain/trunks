@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import itertools
 import json
 import os
@@ -75,10 +76,21 @@ class WorkflowJob:
 
 
 @dataclass(frozen=True)
+class TriggerFilter:
+    branches: tuple[str, ...] = ()
+    branches_ignore: tuple[str, ...] = ()
+    paths: tuple[str, ...] = ()
+    paths_ignore: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    tags_ignore: tuple[str, ...] = ()
+    types: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Workflow:
     path: str
     name: str
-    triggers: tuple[str, ...]
+    triggers: dict[str, TriggerFilter]
     jobs: tuple[WorkflowJob, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -500,16 +512,113 @@ def _parse_matrix(raw: dict[object, object]) -> tuple[dict[str, object], ...]:
     return combinations
 
 
-def _parse_triggers(raw: object) -> tuple[str, ...]:
+def _parse_trigger_filter(config: object) -> TriggerFilter:
+    if not isinstance(config, dict):
+        return TriggerFilter()
+    return TriggerFilter(
+        branches=_str_list(config.get("branches")),
+        branches_ignore=_str_list(config.get("branches-ignore")),
+        paths=_str_list(config.get("paths")),
+        paths_ignore=_str_list(config.get("paths-ignore")),
+        tags=_str_list(config.get("tags")),
+        tags_ignore=_str_list(config.get("tags-ignore")),
+        types=_str_list(config.get("types")),
+    )
+
+
+def _str_list(raw: object) -> tuple[str, ...]:
     if raw is None:
         return ()
     if isinstance(raw, str):
         return (raw,)
     if isinstance(raw, list):
         return tuple(str(item) for item in raw)
-    if isinstance(raw, dict):
-        return tuple(str(key) for key in raw)
     return ()
+
+
+def _parse_triggers(raw: object) -> dict[str, TriggerFilter]:
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        return {raw: TriggerFilter()}
+    if isinstance(raw, list):
+        return {str(item): TriggerFilter() for item in raw}
+    if isinstance(raw, dict):
+        return {str(key): _parse_trigger_filter(val) for key, val in raw.items()}
+    return {}
+
+
+def _pattern_matches(value: str, patterns: tuple[str, ...]) -> bool:
+    for pattern in patterns:
+        if fnmatch.fnmatch(value, pattern):
+            return True
+    return False
+
+
+def trigger_matches_branch(filt: TriggerFilter, branch: str) -> bool:
+    if filt.branches and filt.branches_ignore:
+        return False
+    if filt.branches:
+        return _pattern_matches(branch, filt.branches)
+    if filt.branches_ignore:
+        return not _pattern_matches(branch, filt.branches_ignore)
+    return True
+
+
+def trigger_matches_paths(filt: TriggerFilter, changed_files: list[str]) -> bool:
+    if filt.paths and filt.paths_ignore:
+        return False
+    if not filt.paths and not filt.paths_ignore:
+        return True
+    if filt.paths:
+        return any(_pattern_matches(f, filt.paths) for f in changed_files)
+    return not all(_pattern_matches(f, filt.paths_ignore) for f in changed_files)
+
+
+def trigger_matches_tags(filt: TriggerFilter, tag: str | None) -> bool:
+    if tag is None:
+        return not filt.tags
+    if filt.tags and filt.tags_ignore:
+        return False
+    if filt.tags:
+        return _pattern_matches(tag, filt.tags)
+    if filt.tags_ignore:
+        return not _pattern_matches(tag, filt.tags_ignore)
+    return True
+
+
+def trigger_matches_types(filt: TriggerFilter, event_type: str) -> bool:
+    if not filt.types:
+        return True
+    return event_type in filt.types
+
+
+def push_trigger_matches(
+    filt: TriggerFilter,
+    *,
+    branch: str,
+    changed_files: list[str],
+    tag: str | None = None,
+) -> bool:
+    return (
+        trigger_matches_branch(filt, branch)
+        and trigger_matches_paths(filt, changed_files)
+        and trigger_matches_tags(filt, tag)
+    )
+
+
+def pull_request_trigger_matches(
+    filt: TriggerFilter,
+    *,
+    branch: str,
+    changed_files: list[str],
+    event_type: str = "synchronize",
+) -> bool:
+    return (
+        trigger_matches_branch(filt, branch)
+        and trigger_matches_paths(filt, changed_files)
+        and trigger_matches_types(filt, event_type)
+    )
 
 
 def _validate_needs(jobs: tuple[WorkflowJob, ...], path: Path) -> None:
