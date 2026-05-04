@@ -339,12 +339,14 @@ async def dispatch(argv: list[str]) -> int:
         if args.json:
             print(json.dumps(public_payload, sort_keys=True))
             return 0
-        if isinstance(public_payload.get("data") if isinstance(public_payload, dict) else None, list):
-            for item in public_payload["data"]:
-                if isinstance(item, dict):
-                    print(f"{item.get('name')} {item.get('source_type')}")
-        elif isinstance(public_payload, dict):
-            print(f"{public_payload.get('name')} {public_payload.get('source_type')}")
+        if args.action in {"list", "ls"} and isinstance(public_payload, dict) and isinstance(public_payload.get("data"), list):
+            print(f"{len(public_payload['data'])} secret binding(s)")
+        elif args.action == "bind":
+            print("secret binding created")
+        elif args.action == "show":
+            print("secret binding details available via --json")
+        else:
+            print("secret binding removed")
         return 0
     if args.command == "capacity":
         repo = Repository.find()
