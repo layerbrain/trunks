@@ -103,13 +103,13 @@ trunks actions workflows lint --json
 trunks actions workflow-runs --json
 
 trunks sandboxes providers --json
-trunks sandboxes providers show local --json
-trunks sandboxes providers test local
-trunks sandboxes providers orphans daytona --json
-trunks sandboxes providers cleanup daytona --dry-run --json
-trunks sandboxes providers orphans digitalocean --json
-trunks sandboxes providers cleanup digitalocean --dry-run --json
-trunks sandboxes providers scaffold acme-fast -o ./providers
+trunks sandboxes providers show --name local --json
+trunks sandboxes providers test --name local
+trunks sandboxes providers orphans --name daytona --json
+trunks sandboxes providers cleanup --name daytona --dry-run --json
+trunks sandboxes providers orphans --name digitalocean --json
+trunks sandboxes providers cleanup --name digitalocean --dry-run --json
+trunks sandboxes providers scaffold --name acme-fast -o ./providers
 trunks sandboxes specs --provider local
 trunks sandboxes regions --provider local
 ```

@@ -13,7 +13,15 @@ from unittest.mock import patch
 
 from trunks.backends.s3 import S3
 from trunks.backends.local import Local
-from trunks.cli import _storage_profiles_from_args, _validate_storage_roundtrip, dispatch, init, storage
+from trunks.cli import (
+    _persist_storage_profile,
+    _storage_profiles_from_args,
+    _validate_storage_roundtrip,
+    dispatch,
+    init,
+    storage,
+)
+from trunks.config import config_path, get_storage_profile
 from trunks.credentials import S3Credentials
 from trunks.errors import BackendUnavailable
 from trunks.repository import Repository
@@ -22,6 +30,19 @@ from trunks.url import backend_from_storage, s3_scheme_defaults
 
 
 class StorageCommandTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self._home_tmp = tempfile.TemporaryDirectory()
+        self._home_patch = patch.dict(
+            os.environ,
+            {"TRUNKS_HOME": str(Path(self._home_tmp.name) / "home")},
+            clear=False,
+        )
+        self._home_patch.start()
+
+    def tearDown(self) -> None:
+        self._home_patch.stop()
+        self._home_tmp.cleanup()
+
     def test_minio_url_uses_http_endpoint_and_bucket_path(self) -> None:
         defaults = s3_scheme_defaults("minio://127.0.0.1:9200/company-code", endpoint=None, region=None)
         self.assertEqual(defaults.endpoint, "http://127.0.0.1:9200")
@@ -234,6 +255,68 @@ class StorageCommandTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("local://", out.getvalue())
             finally:
                 os.chdir(cwd)
+
+    async def test_storage_add_writes_global_profile_and_secret_free_repo_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "home"
+            cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                init(name="app", backend=None)
+                remote = str(root / "remote")
+                with patch.dict(os.environ, {"TRUNKS_HOME": str(home)}, clear=False):
+                    out = io.StringIO()
+                    with redirect_stdout(out):
+                        rc = await dispatch([
+                            "storage",
+                            "add",
+                            "--name",
+                            "primary",
+                            "--backend",
+                            "local",
+                            "--path",
+                            remote,
+                        ])
+                    self.assertEqual(rc, 0)
+                    repo_profile = Repository.find().storage_profile("primary")
+                    self.assertIsNotNone(repo_profile)
+                    assert repo_profile is not None
+                    self.assertEqual(repo_profile.credentials, {})
+
+                    global_profile = get_storage_profile("primary")
+                    self.assertIsNotNone(global_profile)
+                    assert global_profile is not None
+                    self.assertEqual(global_profile.backend, "local")
+                    self.assertEqual(global_profile.settings["path"], remote)
+                    self.assertIn("[storage.primary]", config_path().read_text(encoding="utf-8"))
+            finally:
+                os.chdir(cwd)
+
+    def test_storage_credentials_live_in_global_config_and_are_merged_at_connect_time(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            with patch.dict(os.environ, {"TRUNKS_HOME": str(home)}, clear=False):
+                repo = Repository.init(Path(tmp) / "repo", name="app", backend=None)
+                _persist_storage_profile(repo, Storage(
+                    name="primary",
+                    backend="s3",
+                    role="primary",
+                    settings={"bucket": "company", "prefix": "trunks/{repo}.trunk"},
+                    credentials={"access_key": "key", "secret_key": "secret"},
+                ))
+
+                repo_profile = repo.storage_profile("primary")
+                self.assertIsNotNone(repo_profile)
+                assert repo_profile is not None
+                self.assertEqual(repo_profile.credentials, {})
+                self.assertEqual(get_storage_profile("primary").credentials["secret_key"], "secret")  # type: ignore[union-attr]
+
+                backend = backend_from_storage(repo_profile, "app")
+                self.assertIsNotNone(backend)
+                assert backend is not None
+                self.assertEqual(getattr(backend, "bucket"), "company")
+                self.assertEqual(getattr(backend, "credentials").secret_key, "secret")
 
     async def test_storage_wizard_configures_local_storage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

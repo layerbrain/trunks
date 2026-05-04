@@ -308,7 +308,7 @@ class DigitalOceanProviderTests(unittest.IsolatedAsyncioTestCase):
         out = io.StringIO()
         with patch.dict(os.environ, {"TRUNKS_DIGITALOCEAN_API_TOKEN": "test-token"}, clear=False):
             with redirect_stdout(out):
-                code = await dispatch(["providers", "show", "digitalocean", "--json"])
+                code = await dispatch(["providers", "show", "--name", "digitalocean", "--json"])
         self.assertEqual(code, 0)
         payload = json.loads(out.getvalue())
         self.assertEqual(payload["id"], "digitalocean")
@@ -320,7 +320,7 @@ class DigitalOceanProviderTests(unittest.IsolatedAsyncioTestCase):
         err = io.StringIO()
         with patch.dict(os.environ, {"TRUNKS_DIGITALOCEAN_API_TOKEN": "test-token"}, clear=False):
             with redirect_stderr(err), self.assertRaises(SystemExit) as caught:
-                await dispatch(["providers", "test", "digitalocean", "--json"])
+                await dispatch(["providers", "test", "--name", "digitalocean", "--json"])
         self.assertNotEqual(caught.exception.code, 0)
 
 

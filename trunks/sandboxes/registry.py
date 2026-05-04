@@ -7,6 +7,7 @@ from importlib.metadata import entry_points
 from typing import Any
 
 from trunks._auto import run_auto
+from trunks.config import load_sandbox_provider_profiles
 from .profile import SandboxProviderProfile
 from .provider import NetworkMode, SandboxProvider, SandboxProviderInfo, Spec, Isolation
 
@@ -60,8 +61,6 @@ class ProviderRegistry:
         *,
         profiles: Iterable[SandboxProviderProfile] | None = None,
     ) -> "ProviderRegistry":
-        if profiles is not None:
-            return await cls.discover_from_profiles_async(profiles)
         raw_config = config or {}
         registered: list[RegisteredProvider] = []
         for index, (provider_id, path) in enumerate(FIRST_PARTY_PROVIDERS.items()):
@@ -100,6 +99,17 @@ class ProviderRegistry:
                     provider=instance,
                 )
             )
+        configured_profiles = list(load_sandbox_provider_profiles() if profiles is None else profiles)
+        if configured_profiles:
+            profile_registered = await cls._registered_from_profiles_async(configured_profiles)
+            for item in profile_registered:
+                registered = [
+                    candidate
+                    for candidate in registered
+                    if candidate.name != item.name
+                    and not (candidate.type == item.type and item.name != item.type)
+                ]
+                registered.append(item)
         return cls(registered)
 
     @classmethod
@@ -107,6 +117,13 @@ class ProviderRegistry:
         cls,
         profiles: Iterable[SandboxProviderProfile],
     ) -> "ProviderRegistry":
+        return cls(await cls._registered_from_profiles_async(profiles))
+
+    @classmethod
+    async def _registered_from_profiles_async(
+        cls,
+        profiles: Iterable[SandboxProviderProfile],
+    ) -> list[RegisteredProvider]:
         registered: list[RegisteredProvider] = []
         first_party = FIRST_PARTY_PROVIDERS
         entry_points_map = _entry_point_providers()
@@ -133,7 +150,7 @@ class ProviderRegistry:
                     provider=instance,
                 )
             )
-        return cls(registered)
+        return registered
 
     def list(self) -> list[SandboxProviderInfo]:
         return [item.provider.info for item in self._registered]

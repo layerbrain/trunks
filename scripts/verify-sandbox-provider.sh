@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "usage: scripts/verify-sandbox-provider.sh <provider> [--live]" >&2
+if [[ $# -lt 2 || "${1:-}" != "--name" ]]; then
+  echo "usage: scripts/verify-sandbox-provider.sh --name <provider> [--live]" >&2
   exit 2
 fi
 
-provider="$1"
-mode="${2:-}"
+provider="$2"
+mode="${3:-}"
 python_bin="${PYTHON:-python3.12}"
 
 if [[ "$provider" == "daytona" && "$mode" != "--live" && -z "${DAYTONA_API_KEY:-}" ]]; then
@@ -21,8 +21,8 @@ from trunks.sandboxes.cli import dispatch
 
 async def main():
     for argv in (
-        ["providers", "show", "$provider", "--json"],
-        ["providers", "doctor", "$provider", "--json"],
+        ["providers", "show", "--name", "$provider", "--json"],
+        ["providers", "doctor", "--name", "$provider", "--json"],
     ):
         code = await dispatch(argv)
         if code:
@@ -37,13 +37,13 @@ import asyncio
 from trunks.sandboxes.cli import dispatch
 
 async def main():
-    await dispatch(["providers", "cleanup", "$provider", "--prefix", "trunks-", "--json"])
+    await dispatch(["providers", "cleanup", "--name", "$provider", "--prefix", "trunks-", "--json"])
     try:
-        code = await dispatch(["providers", "test", "$provider", "--live", "--json"])
+        code = await dispatch(["providers", "test", "--name", "$provider", "--live", "--json"])
         if code:
             raise SystemExit(code)
     finally:
-        await dispatch(["providers", "cleanup", "$provider", "--prefix", "trunks-", "--json"])
+        await dispatch(["providers", "cleanup", "--name", "$provider", "--prefix", "trunks-", "--json"])
 
 asyncio.run(main())
 PY

@@ -323,7 +323,7 @@ class PrimeIntellectProviderTests(unittest.IsolatedAsyncioTestCase):
         out = io.StringIO()
         with patch.dict(os.environ, {PRIME_KEY_ENV: "test-key"}, clear=False):
             with redirect_stdout(out):
-                code = await dispatch(["providers", "show", "primeintellect", "--json"])
+                code = await dispatch(["providers", "show", "--name", "primeintellect", "--json"])
         self.assertEqual(code, 0)
         payload = json.loads(out.getvalue())
         self.assertEqual(payload["id"], "primeintellect")

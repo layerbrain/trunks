@@ -7,6 +7,10 @@ import sys
 import time
 from dataclasses import asdict
 
+from trunks.config import (
+    remove_sandbox_provider_profile,
+    set_sandbox_provider_profile,
+)
 from .contract import run_provider_contract
 from .profile import SandboxProviderProfile, valid_sandbox_provider_name
 from .registry import FIRST_PARTY_PROVIDERS, ProviderRegistry
@@ -42,6 +46,7 @@ async def dispatch(argv: list[str]) -> int:
     providers = sub.add_parser("providers")
     providers.add_argument("action", nargs="?", choices=PROVIDER_ACTIONS, default="list")
     providers.add_argument("id", nargs="?")
+    providers.add_argument("--name", default=None)
     providers.add_argument("-o", "--output", default=None)
     providers.add_argument("--type", dest="provider_type", default=None)
     providers.add_argument("--priority", type=int, default=None)
@@ -103,28 +108,25 @@ async def _dispatch_providers(parser: argparse.ArgumentParser, args: argparse.Na
     registry = await _build_registry()
 
     if args.action == "show":
-        if not args.id:
-            parser.error("providers show requires <id>")
-        registered = registry.get_registered(args.id)
+        name = _provider_name(parser, args, action="show")
+        registered = registry.get_registered(name)
         payload = _registered_record(registered)
         print(json.dumps(payload, sort_keys=True))
         return 0
     if args.action == "test":
-        if not args.id:
-            parser.error("providers test requires <id>")
-        provider = registry.get(args.id)
+        name = _provider_name(parser, args, action="test")
+        provider = registry.get(name)
         _require_live_for_remote_provider(parser, provider, action="test", live=args.live)
         print(json.dumps(await run_provider_contract(provider), sort_keys=True))
         return 0
     if args.action == "doctor":
-        if not args.id:
-            parser.error("providers doctor requires <id>")
-        provider = registry.get(args.id)
+        name = _provider_name(parser, args, action="doctor")
+        provider = registry.get(name)
         extra = await provider.doctor() if hasattr(provider, "doctor") else {}
         payload = {
             "_schema_version": "trunks.sandboxes.provider_doctor.v1",
             "object": "provider_doctor",
-            "provider": args.id,
+            "provider": name,
             "ok": True,
             "info": _provider_info(provider.info),
             "checks": extra,
@@ -132,26 +134,24 @@ async def _dispatch_providers(parser: argparse.ArgumentParser, args: argparse.Na
         print(json.dumps(payload, sort_keys=True))
         return 0
     if args.action == "benchmark":
-        if not args.id:
-            parser.error("providers benchmark requires <id>")
-        provider = registry.get(args.id)
+        name = _provider_name(parser, args, action="benchmark")
+        provider = registry.get(name)
         _require_live_for_remote_provider(parser, provider, action="benchmark", live=args.live)
         started = time.monotonic()
         result = await run_provider_contract(provider)
         payload = {
             "_schema_version": "trunks.sandboxes.provider_benchmark.v1",
             "object": "provider_benchmark",
-            "provider": args.id,
+            "provider": name,
             "contract": result,
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
         print(json.dumps(payload, sort_keys=True))
         return 0
     if args.action == "scaffold":
-        if not args.id:
-            parser.error("providers scaffold requires <id>")
-        output = args.output or f"trunks-sandbox-{args.id}"
-        path = scaffold_provider(args.id, output=output)
+        name = _provider_name(parser, args, action="scaffold")
+        output = args.output or f"trunks-sandbox-{name}"
+        path = scaffold_provider(name, output=output)
         payload = {
             "_schema_version": "trunks.sandboxes.provider_scaffold.v1",
             "object": "provider_scaffold",
@@ -163,11 +163,10 @@ async def _dispatch_providers(parser: argparse.ArgumentParser, args: argparse.Na
         print(path)
         return 0
     if args.action in {"orphans", "cleanup"}:
-        if not args.id:
-            parser.error(f"providers {args.action} requires <id>")
-        provider = registry.get(args.id)
+        name = _provider_name(parser, args, action=args.action)
+        provider = registry.get(name)
         if not hasattr(provider, "cleanup_orphans"):
-            parser.error(f"provider {args.id!r} does not expose orphan cleanup")
+            parser.error(f"provider {name!r} does not expose orphan cleanup")
         dry_run = args.dry_run or args.action == "orphans"
         payload = await provider.cleanup_orphans(prefix=args.prefix, dry_run=dry_run)  # type: ignore[attr-defined]
         print(json.dumps(payload, sort_keys=True))
@@ -178,38 +177,16 @@ async def _dispatch_providers(parser: argparse.ArgumentParser, args: argparse.Na
 
 
 async def _build_registry() -> ProviderRegistry:
-    profiles = _load_profiles_or_none()
-    if profiles is not None:
-        return await ProviderRegistry.discover_async(profiles=profiles)
     return await ProviderRegistry.discover_async()
 
 
-def _load_profiles_or_none() -> list[SandboxProviderProfile] | None:
-    repo = _open_repository()
-    if repo is None:
-        return None
-    profiles = repo.list_sandbox_provider_profiles()
-    return profiles if profiles else None
-
-
-def _open_repository():
-    try:
-        from trunks.errors import RepositoryNotFound
-        from trunks.repository import Repository
-    except ImportError:
-        return None
-    try:
-        return Repository.find()
-    except RepositoryNotFound:
-        return None
-
-
 def _providers_add(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    if not args.id:
+    name = _provider_name(parser, args, action="add")
+    if not name:
         parser.error("providers add requires <name>")
-    if not valid_sandbox_provider_name(args.id):
+    if not valid_sandbox_provider_name(name):
         parser.error(
-            f"invalid provider name {args.id!r}: "
+            f"invalid provider name {name!r}: "
             "lowercase alphanumeric with hyphens or underscores"
         )
     if not args.provider_type:
@@ -219,13 +196,6 @@ def _providers_add(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
             f"unknown provider type {args.provider_type!r}; "
             f"available: {', '.join(sorted(_all_provider_types()))}"
         )
-    repo = _open_repository()
-    if repo is None:
-        print(
-            "trunks: no trunks repository here (run `trunks init` first)",
-            file=sys.stderr,
-        )
-        return 1
     settings: dict[str, str] = {}
     credentials: dict[str, str] = {}
     if args.provider_region:
@@ -243,14 +213,14 @@ def _providers_add(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
     priority = args.priority if args.priority is not None else 100
     enabled = args.enabled != "false"
     profile = SandboxProviderProfile(
-        name=args.id,
+        name=name,
         type=args.provider_type,
         priority=priority,
         enabled=enabled,
         settings=settings,
         credentials=credentials,
     )
-    repo.set_sandbox_provider_profile(profile)
+    set_sandbox_provider_profile(profile)
     payload = {
         "_schema_version": "trunks.sandboxes.provider_profile.v1",
         "object": "sandbox_provider_profile",
@@ -264,29 +234,28 @@ def _providers_add(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
 
 
 def _providers_rm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    if not args.id:
-        parser.error("providers rm requires <name>")
-    repo = _open_repository()
-    if repo is None:
-        print(
-            "trunks: no trunks repository here (run `trunks init` first)",
-            file=sys.stderr,
-        )
-        return 1
-    removed = repo.remove_sandbox_provider_profile(args.id)
+    name = _provider_name(parser, args, action="rm")
+    removed = remove_sandbox_provider_profile(name)
     if not removed:
-        print(f"providers rm failed: unknown provider {args.id}", file=sys.stderr)
+        print(f"providers rm failed: unknown provider {name}", file=sys.stderr)
         return 1
     if args.json:
         print(
             json.dumps(
-                {"object": "sandbox_provider_profile", "name": args.id, "deleted": True},
+                {"object": "sandbox_provider_profile", "name": name, "deleted": True},
                 sort_keys=True,
             )
         )
         return 0
-    print(f"Removed     {args.id}")
+    print(f"Removed     {name}")
     return 0
+
+
+def _provider_name(parser: argparse.ArgumentParser, args: argparse.Namespace, *, action: str) -> str:
+    name = args.name or args.id
+    if not name:
+        parser.error(f"providers {action} requires --name <name>")
+    return name
 
 
 def _parse_kv(parser: argparse.ArgumentParser, flag: str, value: str) -> tuple[str, str]:

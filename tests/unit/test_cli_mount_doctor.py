@@ -14,6 +14,19 @@ from trunks.repository import Repository
 
 
 class CliMountDoctorTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self._home_tmp = tempfile.TemporaryDirectory()
+        self._home_patch = patch.dict(
+            os.environ,
+            {"TRUNKS_HOME": str(Path(self._home_tmp.name) / "home")},
+            clear=False,
+        )
+        self._home_patch.start()
+
+    def tearDown(self) -> None:
+        self._home_patch.stop()
+        self._home_tmp.cleanup()
+
     async def test_mount_creates_repo_at_named_path_without_git(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "my-app"

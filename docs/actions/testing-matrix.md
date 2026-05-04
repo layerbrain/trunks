@@ -11,7 +11,7 @@ scripts/verify-actions.sh
 Live hosted-provider checks are opt-in because they create provider resources:
 
 ```bash
-DAYTONA_API_KEY=... scripts/verify-sandbox-provider.sh daytona --live
+DAYTONA_API_KEY=... scripts/verify-sandbox-provider.sh --name daytona --live
 ```
 
 | Area | Edge case | Expected behavior | Coverage |

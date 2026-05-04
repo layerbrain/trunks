@@ -5,7 +5,7 @@ Enterprises and compute vendors can add a sandbox provider without changing work
 ## Python Providers
 
 ```bash
-trunks sandboxes providers scaffold acme-fast -o ./providers
+trunks sandboxes providers scaffold --name acme-fast -o ./providers
 ```
 
 Providers are Python classes, even when the upstream provider is a normal REST API. The provider class owns auth, request bodies, response parsing, readiness polling, cleanup, and the static spec catalog it can satisfy. Trunks does not load provider SDK packages and does not route through JSON provider definitions.
@@ -40,8 +40,8 @@ For remote hosted sandboxes, `hydrate` must make the requested commit or workspa
 ## Prove It
 
 ```bash
-trunks sandboxes providers test acme-fast --json
-trunks sandboxes providers benchmark acme-fast --json
+trunks sandboxes providers test --name acme-fast --json
+trunks sandboxes providers benchmark --name acme-fast --json
 ```
 
 A provider should not be used for Actions routing until the live contract passes.

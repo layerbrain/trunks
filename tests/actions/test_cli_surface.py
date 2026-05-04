@@ -7,7 +7,9 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
+from trunks.config import config_path, get_sandbox_provider_profile
 from trunks.cli import dispatch
 from trunks.repository import Repository
 from trunks.sandboxes import Spec
@@ -111,32 +113,32 @@ jobs:
 
 class SandboxesCliSurfaceTests(unittest.IsolatedAsyncioTestCase):
     async def test_every_sandboxes_cli_command(self) -> None:
-        listed = await _json_cli(["sandboxes", "providers", "--json"])
-        provider_ids = {item["id"] for item in listed["data"]}
-        self.assertIn("local", provider_ids)
-        self.assertEqual((await _json_cli(["sandboxes", "providers", "show", "local"]))["id"], "local")
-        self.assertTrue((await _json_cli(["sandboxes", "providers", "doctor", "local", "--json"]))["ok"])
-        self.assertTrue((await _json_cli(["sandboxes", "providers", "test", "local", "--json"]))["passed"])
-        self.assertTrue((await _json_cli(["sandboxes", "providers", "benchmark", "local", "--json"]))["contract"]["passed"])
-        local_specs = await _json_cli(["sandboxes", "specs", "--provider", "local", "--json"])
-        self.assertEqual(local_specs["data"][0]["provider"], "local")
-        self.assertEqual(local_specs["data"][0]["specs"][0]["cpu"], 1)
-        self.assertIn("key", local_specs["data"][0]["specs"][0])
-        self.assertEqual((await _json_cli(["sandboxes", "regions", "--provider", "local", "--json"]))["data"][0]["regions"], ["local"])
-        with tempfile.TemporaryDirectory() as tmp:
-            scaffold = await _json_cli(["sandboxes", "providers", "scaffold", "edge", "-o", tmp, "--json"])
-            self.assertTrue(Path(scaffold["path"]).exists())
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            cwd = Path.cwd()
-            os.chdir(root)
-            try:
-                Repository.init(name="providers")
+            home = root / "home"
+            with patch.dict(os.environ, {"TRUNKS_HOME": str(home)}, clear=False):
+                listed = await _json_cli(["sandboxes", "providers", "--json"])
+                provider_ids = {item["id"] for item in listed["data"]}
+                self.assertIn("local", provider_ids)
+                self.assertEqual((await _json_cli(["sandboxes", "providers", "show", "--name", "local"]))["id"], "local")
+                self.assertTrue((await _json_cli(["sandboxes", "providers", "doctor", "--name", "local", "--json"]))["ok"])
+                self.assertTrue((await _json_cli(["sandboxes", "providers", "test", "--name", "local", "--json"]))["passed"])
+                self.assertTrue((await _json_cli(["sandboxes", "providers", "benchmark", "--name", "local", "--json"]))["contract"]["passed"])
+                local_specs = await _json_cli(["sandboxes", "specs", "--provider", "local", "--json"])
+                self.assertEqual(local_specs["data"][0]["provider"], "local")
+                self.assertEqual(local_specs["data"][0]["specs"][0]["cpu"], 1)
+                self.assertIn("key", local_specs["data"][0]["specs"][0])
+                self.assertEqual((await _json_cli(["sandboxes", "regions", "--provider", "local", "--json"]))["data"][0]["regions"], ["local"])
+                with tempfile.TemporaryDirectory() as scaffold_tmp:
+                    scaffold = await _json_cli(["sandboxes", "providers", "scaffold", "--name", "edge", "-o", scaffold_tmp, "--json"])
+                    self.assertTrue(Path(scaffold["path"]).exists())
+
                 added = await _json_cli(
                     [
                         "sandboxes",
                         "providers",
                         "add",
+                        "--name",
                         "do-main",
                         "--type",
                         "digitalocean",
@@ -149,15 +151,28 @@ class SandboxesCliSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(added["credentials"]["api_key"], "****")
                 self.assertEqual(added["settings"]["region"], "nyc3")
-                shown = await _json_cli(["sandboxes", "providers", "show", "do-main", "--json"])
+                stored = get_sandbox_provider_profile("do-main")
+                self.assertIsNotNone(stored)
+                assert stored is not None
+                self.assertEqual(stored.credentials["api_key"], "test-token")
+                self.assertIn("[sandbox_provider.do-main]", config_path().read_text(encoding="utf-8"))
+
+                cwd = Path.cwd()
+                os.chdir(root)
+                try:
+                    repo = Repository.init(name="providers")
+                    self.assertEqual(repo.list_sandbox_provider_profiles(), [])
+                finally:
+                    os.chdir(cwd)
+
+                shown = await _json_cli(["sandboxes", "providers", "show", "--name", "do-main", "--json"])
                 self.assertEqual(shown["name"], "do-main")
                 self.assertEqual(shown["type"], "digitalocean")
                 self.assertEqual(shown["specs"][0]["cpu"], 1)
                 self.assertIn("key", shown["specs"][0])
-                removed = await _json_cli(["sandboxes", "providers", "rm", "do-main", "--json"])
+                removed = await _json_cli(["sandboxes", "providers", "rm", "--name", "do-main", "--json"])
                 self.assertTrue(removed["deleted"])
-            finally:
-                os.chdir(cwd)
+                self.assertIsNone(get_sandbox_provider_profile("do-main"))
 
 
 async def _json_cli(args: list[str]) -> dict[str, object]:
