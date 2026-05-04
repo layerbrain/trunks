@@ -45,6 +45,7 @@ testing = ["testcontainers"]
 
 [project.scripts]
 trunks = "trunks.cli:main"
+git-remote-trunks = "trunks.remote_helper:main"
 
 [build-system]
 requires = ["hatchling>=1.18,<1.27"]
