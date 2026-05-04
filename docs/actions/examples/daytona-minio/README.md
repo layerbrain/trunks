@@ -2,7 +2,7 @@
 
 Run Trunks Actions CI on Daytona with S3-compatible storage. No GitHub Actions, no central CI server.
 
-The code is already here. You just configure storage, add Daytona, and push.
+This example repo is ready to run. It includes the app, test scripts, and workflow. You configure storage, add Daytona, make a change, and push.
 
 ## Prerequisites
 
@@ -72,6 +72,8 @@ The `on: push` trigger fires automatically. Trunks routes the job to Daytona, ru
 
 ```bash
 trunks actions workflow-runs --limit 5
+trunks actions workflow-runs --id <workflow-run-id> jobs
+trunks actions watch --id <job-run-id>
 trunks actions logs --id <job-run-id>
 trunks actions artifacts --id <job-run-id>
 trunks actions artifacts --id <job-run-id> get report.json -o report.json
@@ -92,16 +94,3 @@ docker rm -f trunks-demo-minio
 | `app/server.py` | FastAPI app with `/`, `/healthz`, `/echo/{msg}`, `/work` |
 | `scripts/run-preview.sh` | Installs deps, starts uvicorn, waits for ready, runs smoke |
 | `scripts/smoke.py` | Hits endpoints for 60s, writes `report.json` with latency stats |
-
-## Trigger filters
-
-The workflow uses `on: [push, workflow_dispatch]` which fires on every push. You can scope it:
-
-```yaml
-on:
-  push:
-    branches: [main]
-    paths: [app/**, scripts/**]
-```
-
-This only triggers when pushing to `main` with changes in `app/` or `scripts/`.
