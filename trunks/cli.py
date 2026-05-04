@@ -1043,6 +1043,8 @@ def _resolve_mount_storage(name: str | None) -> tuple[str | None, str | None]:
     if name:
         for profile in profiles:
             if profile.name == name:
+                if profile.role != "primary":
+                    return None, f"storage profile {name!r} is {profile.role}, not primary"
                 return name, None
         return None, (
             f"storage profile {name!r} not found in ~/.trunks/config "
@@ -1084,11 +1086,34 @@ def _bootstrap_git_remote(target: Path, repo_name: str, storage_name: str) -> di
             [git_bin, "-C", str(target), "remote", "add", "origin", desired_url],
             check=True,
         )
+        _configure_git_upstream(target, git_bin)
         return {"git": git_status, "remote": "added", "url": desired_url}
     current_url = existing.stdout.strip()
     if current_url == desired_url:
+        _configure_git_upstream(target, git_bin)
         return {"git": git_status, "remote": "exists", "url": desired_url}
     return {"git": git_status, "remote": "conflict", "url": current_url}
+
+
+def _configure_git_upstream(target: Path, git_bin: str) -> None:
+    current = subprocess.run(
+        [git_bin, "-C", str(target), "symbolic-ref", "--quiet", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if current.returncode != 0:
+        return
+    branch = current.stdout.strip()
+    if not branch:
+        return
+    subprocess.run(
+        [git_bin, "-C", str(target), "config", f"branch.{branch}.remote", "origin"],
+        check=True,
+    )
+    subprocess.run(
+        [git_bin, "-C", str(target), "config", f"branch.{branch}.merge", f"refs/heads/{branch}"],
+        check=True,
+    )
 
 
 async def unmount(path: str | None) -> int:
@@ -1947,11 +1972,19 @@ async def storage_from_args(args: argparse.Namespace) -> int:
     try:
         repo = Repository.find()
     except RepositoryNotFound:
-        print("trunks: no trunks repository here (run `trunks init` first)", file=sys.stderr)
+        repo = None
+
+    repo_name = repo.name if repo is not None else "trunks-config-check"
+    if repo is None and args.storage_backend is None:
+        print(
+            "trunks storage add outside a repo requires --backend "
+            "(or run `trunks mount --repo <name>` first)",
+            file=sys.stderr,
+        )
         return 1
 
     try:
-        profile, validation_profile = _storage_profiles_from_args(args)
+        profile, validation_profile = _storage_profiles_from_args(args, repo_name=repo_name)
     except ValueError as exc:
         print(f"storage add failed: {exc}", file=sys.stderr)
         return 1
@@ -1962,17 +1995,17 @@ async def storage_from_args(args: argparse.Namespace) -> int:
     if profile.role == "mirror" and profile.name in {"primary", "remote"}:
         print("storage add failed: mirror name cannot be primary", file=sys.stderr)
         return 1
-    if BackendURL.parse(validation_profile.url(repo.name)).scheme == "memory":
-        print(f"storage add failed: {validation_profile.url(repo.name)} is ephemeral and cannot be a remote", file=sys.stderr)
+    if BackendURL.parse(validation_profile.url(repo_name)).scheme == "memory":
+        print(f"storage add failed: {validation_profile.url(repo_name)} is ephemeral and cannot be a remote", file=sys.stderr)
         return 1
 
     try:
-        backend = backend_from_storage(validation_profile, repo.name)
+        backend = backend_from_storage(validation_profile, repo_name)
     except Exception as exc:
         print(f"storage add failed: {exc}", file=sys.stderr)
         return 1
     if backend is None:
-        print(f"storage add failed: {profile.url(repo.name)}", file=sys.stderr)
+        print(f"storage add failed: {profile.url(repo_name)}", file=sys.stderr)
         return 1
     async with backend:
         ensure = getattr(backend, "ensure_bucket", None) or getattr(backend, "ensure_container", None)
@@ -1988,13 +2021,17 @@ async def storage_from_args(args: argparse.Namespace) -> int:
             print(f"storage add failed: {exc}", file=sys.stderr)
             return 1
 
-    _persist_storage_profile(repo, profile)
-    await _publish_storage_config(repo)
+    display_repo_name = repo.name if repo is not None else "{repo}"
+    if repo is None:
+        set_global_storage_profile(profile)
+    else:
+        _persist_storage_profile(repo, profile)
+        await _publish_storage_config(repo)
     if getattr(args, "json", False):
-        print(json.dumps(_storage_record(profile.public_record(repo.name)), sort_keys=True))
+        print(json.dumps(_storage_record(profile.public_record(display_repo_name)), sort_keys=True))
         return 0
     label = "Mirror" if profile.role == "mirror" else "Remote"
-    print(f"{label}      {profile.name}  {profile.url(repo.name)}")
+    print(f"{label}      {profile.name}  {profile.url(display_repo_name)}")
     if validation_profile.credentials != profile.credentials or validation_profile.settings != profile.settings:
         print("Credentials validation-only; configure environment variables for future pushes")
     return 0
@@ -2149,7 +2186,7 @@ def _storage_name_arg(args: argparse.Namespace) -> str | None:
     return args.values[0] if args.values else None
 
 
-def _storage_profiles_from_args(args: argparse.Namespace) -> tuple[Storage, Storage]:
+def _storage_profiles_from_args(args: argparse.Namespace, *, repo_name: str | None = None) -> tuple[Storage, Storage]:
     role = "mirror" if args.mirror else "primary"
     storage_url = getattr(args, "storage_url", None)
     if storage_url and args.values:
@@ -2169,7 +2206,7 @@ def _storage_profiles_from_args(args: argparse.Namespace) -> tuple[Storage, Stor
             raise ValueError("usage: trunks storage add <name> <backend-url> [--mirror]")
         if _malformed_backend_url(url):
             raise ValueError(f"malformed backend URL {url}")
-        resolved = resolve_backend_url(url, Repository.find().name)
+        resolved = resolve_backend_url(url, repo_name or Repository.find().name)
         if not resolved:
             raise ValueError(url)
         profile = Storage.from_url(name=name, role=role, url=resolved)

@@ -11,14 +11,12 @@ pip install trunks
 npm install @layerbrain/trunks
 
 mkdir my-app && cd my-app
-git init --initial-branch=main
-trunks init --name my-app
 trunks storage add primary --backend s3 --bucket company-trunks
-git remote add origin trunks://primary/my-app
+trunks mount --repo my-app
 echo "Fix auth" > task.md
 git add .
 git commit -m "update auth"
-git push -u origin main
+git push
 ```
 
 [Get started](tutorial.md){ .md-button .md-button--primary }

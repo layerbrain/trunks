@@ -67,7 +67,7 @@ trunks sandboxes providers test --name daytona --live
 ```bash
 git add .
 git commit -m "trigger CI"
-git push -u origin main
+git push
 ```
 
 The `on: push` trigger fires automatically. Trunks routes the job to Daytona, runs it in a container, writes logs and artifacts to MinIO, and destroys the sandbox.

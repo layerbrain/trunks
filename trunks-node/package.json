@@ -1,6 +1,6 @@
 {
   "name": "@layerbrain/trunks",
-  "version": "1.2.10",
+  "version": "1.2.12",
   "description": "Git repos backed by your own storage. Push to S3, R2, Tigris, MinIO, Postgres, SFTP, NFS, or local disk.",
   "license": "MIT",
   "type": "module",

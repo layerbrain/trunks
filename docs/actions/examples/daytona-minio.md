@@ -74,7 +74,7 @@ commit, and push:
 ```bash
 git add .
 git commit -m "trigger CI"
-git push -u origin main
+git push
 ```
 
 Trunks sees the push, creates the workflow run, routes the job to Daytona, writes

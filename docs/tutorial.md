@@ -27,10 +27,6 @@ actual:  s3://company-trunks/trunks/my-app.trunk
 Production:
 
 ```bash
-mkdir my-app
-cd my-app
-git init --initial-branch=main
-trunks init --name my-app
 trunks storage add primary --backend s3 --bucket company-trunks
 ```
 
@@ -42,13 +38,15 @@ trunks storage add primary --backend local --path /tmp/trunks-store
 
 See [Backends](backends/README.md) for S3, GCS, Azure, Postgres, SFTP, fileshares.
 
-## 3. Add A Git Remote
+## 3. Mount The Repo
 
 ```bash
-git remote add origin trunks://primary/my-app
+mkdir my-app
+cd my-app
+trunks mount --repo my-app
 ```
 
-`trunks://primary/my-app` resolves the configured `primary` storage profile and the `my-app` repo namespace. Real Git owns `.git`; Trunks only runs when Git invokes the remote helper for this URL.
+`trunks mount` creates the Trunks repo, initializes `.git`, wires `origin -> trunks://primary/my-app`, and sets the current branch upstream. Real Git owns `.git`; Trunks only runs when Git invokes the remote helper for this URL.
 
 ## 4. Edit
 
@@ -62,7 +60,7 @@ grep -R "login" src || true
 ```bash
 git add .
 git commit -m "update auth"
-git push -u origin main
+git push
 ```
 
 `git commit` is normal Git. `git push` invokes `git-remote-trunks`, uploads missing objects, advances the backend ref with compare-and-swap, and writes a durable push trigger ref for Trunks Actions.

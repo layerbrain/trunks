@@ -20,7 +20,7 @@ trunks storage update --name primary --url s3://company-trunks-2 --json
 trunks storage delete --name primary --json
 ```
 
-Storage commands configure named backend profiles. Git remotes use those names with `trunks://<storage>/<repo>`. A primary profile plus explicit mirror profiles writes through a strict multi-backend path; inline `trunks+<scheme>://...` URLs target one backend.
+Storage commands configure named backend profiles. `trunks storage add --backend ...` can run once outside a repo to create a global profile; when it runs inside a repo it also binds that repo to the profile. Git remotes use those names with `trunks://<storage>/<repo>`. A primary profile plus explicit mirror profiles writes through a strict multi-backend path; inline `trunks+<scheme>://...` URLs target one backend.
 
 ## Git Remote Helper
 
@@ -56,9 +56,10 @@ Default mount uses a real directory. `--mode virtual` sparsely materializes larg
 `trunks mount` also bootstraps git: if no `.git` exists at the mount path it
 runs `git init --initial-branch=main`, and if no `origin` remote is configured
 it adds `origin -> trunks://<storage>/<repo>` using the single configured
-primary storage profile. Pass `--storage <name>` to pick one explicitly when
-multiple primaries exist; pass `--no-git` to skip the bootstrap entirely.
-Existing non-trunks origins are preserved.
+primary storage profile. It also sets the current branch upstream so plain
+`git push` works after the first commit. Pass `--storage <name>` to pick one
+explicitly when multiple primaries exist; pass `--no-git` to skip the bootstrap
+entirely. Existing non-trunks origins are preserved.
 
 ## Versioning
 
