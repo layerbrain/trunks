@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -33,15 +34,16 @@ def _config() -> _DaytonaConfig:
 
 class DaytonaProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_registry_discovers_daytona_only_when_key_is_configured(self) -> None:
-        with patch.dict(os.environ, {DAYTONA_KEY_ENV: "", "DAYTONA_API_KEY": ""}, clear=False):
-            registry = await ProviderRegistry.discover_async({"providers": {"daytona": {"enabled": True}}})
-            self.assertNotIn("daytona", {info.id for info in registry.list()})
+        with tempfile.TemporaryDirectory() as trunks_home:
+            with patch.dict(os.environ, {"TRUNKS_HOME": trunks_home, DAYTONA_KEY_ENV: "", "DAYTONA_API_KEY": ""}, clear=False):
+                registry = await ProviderRegistry.discover_async({"providers": {"daytona": {"enabled": True}}})
+                self.assertNotIn("daytona", {info.id for info in registry.list()})
 
-        with patch.dict(os.environ, {DAYTONA_KEY_ENV: "test-key"}, clear=False):
-            registry = await ProviderRegistry.discover_async()
-            provider = registry.get("daytona")
-            self.assertEqual(provider.info.id, "daytona")
-            self.assertEqual(provider.info.isolation, frozenset({"container"}))
+            with patch.dict(os.environ, {"TRUNKS_HOME": trunks_home, DAYTONA_KEY_ENV: "test-key"}, clear=False):
+                registry = await ProviderRegistry.discover_async()
+                provider = registry.get("daytona")
+                self.assertEqual(provider.info.id, "daytona")
+                self.assertEqual(provider.info.isolation, frozenset({"container"}))
 
     async def test_daytona_contract_uses_python_provider_without_sdk_or_json_definition(self) -> None:
         requests: list[tuple[str, str, bytes | None, dict[str, str]]] = []
@@ -118,6 +120,20 @@ class DaytonaProviderTests(unittest.IsolatedAsyncioTestCase):
                 isolation="container",
             )
         )
+
+    async def test_daytona_execute_accepts_toolbox_string_result_shape(self) -> None:
+        def request(client, method, url, *, body, content_type, headers):
+            if method == "POST" and url == "https://toolbox.test/sandbox-123/process/execute":
+                return b'{"exitCode":7,"result":"stdout\\nstderr\\n"}'
+            raise AssertionError(f"unexpected request: {method} {url}")
+
+        client = _DaytonaClient(api_key="test-key", api_url="https://api.test", toolbox_url="https://toolbox.test")
+        with patch.object(_DaytonaClient, "request", request):
+            response = client.execute("sandbox-123", "echo ok", cwd="/workspace", env={}, timeout_s=10)
+
+        self.assertEqual(response.exit_code, 7)
+        self.assertEqual(response.stdout, "stdout\nstderr\n")
+        self.assertEqual(response.stderr, "")
 
     async def test_create_sends_organization_header_when_configured(self) -> None:
         seen: list[dict[str, str]] = []

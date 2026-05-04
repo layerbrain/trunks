@@ -269,8 +269,15 @@ class _DaytonaClient:
             self._toolbox(sandbox_id, "/process/execute"),
             body={"command": command, "cwd": cwd, "timeout": timeout_s, "envs": env},
         )
-        result = response.get("result") if isinstance(response.get("result"), dict) else response
-        assert isinstance(result, dict)
+        result = response.get("result")
+        if isinstance(result, str):
+            return _ExecutionResponse(
+                stdout=result,
+                stderr=str(response.get("stderr") or response.get("error") or ""),
+                exit_code=int(response.get("exitCode") or response.get("exit_code") or response.get("code") or 0),
+            )
+        if not isinstance(result, dict):
+            result = response
         return _ExecutionResponse(
             stdout=str(result.get("stdout") or ""),
             stderr=str(result.get("stderr") or response.get("stderr") or response.get("error") or ""),

@@ -5,6 +5,7 @@ import unittest
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 
+from trunks.actions.run import _collect_artifacts_from_workspace
 from trunks.actions.hydration import REMOTE_WORKSPACE, materialize_commit, prepared_workspace
 from trunks.repository import Repository
 from trunks.sandboxes import (
@@ -49,6 +50,25 @@ class CapturingSandbox:
 
     async def destroy(self) -> None:
         return None
+
+
+class PartialArtifactSandbox(CapturingSandbox):
+    def __init__(self) -> None:
+        super().__init__()
+        self.remote_files = {
+            f"{REMOTE_WORKSPACE}/logs/app.log": b"app-log\n",
+            f"{REMOTE_WORKSPACE}/logs/tunnel.log": b"tunnel-log\n",
+        }
+
+    async def download(self, files: tuple[SandboxFile, ...]) -> AsyncIterator[TransferProgress]:
+        for file in files:
+            data = self.remote_files.get(file.source)
+            if data is None:
+                raise FileNotFoundError(file.source)
+            target = Path(file.target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            yield TransferProgress(file=file, bytes_total=len(data), bytes_done=len(data))
 
 
 def _remote_info() -> SandboxProviderInfo:
@@ -119,6 +139,23 @@ class RemoteHydrationTests(unittest.IsolatedAsyncioTestCase):
             materialize_commit(repo, str(commit.id), target)
 
             self.assertEqual((target / "pkg" / "mod.py").read_text(encoding="utf-8"), "print('ok')\n")
+
+    async def test_remote_artifact_collection_keeps_available_files_when_one_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = Repository.init(cwd=root, name="demo")
+            sandbox = PartialArtifactSandbox()
+
+            artifacts = await _collect_artifacts_from_workspace(
+                repo,
+                "run",
+                sandbox=sandbox,
+                provider=_remote_info(),
+                root=REMOTE_WORKSPACE,
+                paths=("report.json", "logs/app.log", "logs/tunnel.log"),
+            )
+
+            self.assertEqual([artifact["name"] for artifact in artifacts], ["logs/app.log", "logs/tunnel.log"])
 
 
 if __name__ == "__main__":

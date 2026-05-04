@@ -191,16 +191,14 @@ async def _collect_artifacts_from_workspace(
         return collect_artifacts(repo, run, root=root, paths=paths)
     with tempfile.TemporaryDirectory(prefix="trunks-actions-artifacts-") as tmp:
         local_root = Path(tmp)
-        downloads = tuple(
-            SandboxFile(
+        for path in paths:
+            download = SandboxFile(
                 source=path if path.startswith("/") else f"{root.rstrip('/')}/{path}",
                 target=str(local_root / path.lstrip("/")),
             )
-            for path in paths
-        )
-        with contextlib.suppress(Exception):
-            async for _progress in sandbox.download(downloads):  # type: ignore[attr-defined]
-                pass
+            with contextlib.suppress(Exception):
+                async for _progress in sandbox.download((download,)):  # type: ignore[attr-defined]
+                    pass
         return collect_artifacts(repo, run, root=local_root, paths=paths)
 
 

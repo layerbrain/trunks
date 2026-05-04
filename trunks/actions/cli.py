@@ -337,7 +337,7 @@ async def dispatch(argv: list[str]) -> int:
             payload = remove_secret_binding(repo, args.name)
         public_payload = _public_secret_payload(payload)
         if args.json:
-            print(json.dumps({"object": "secret_binding_result", "action": args.action, "status": "ok"}, sort_keys=True))
+            print(json.dumps(public_payload, sort_keys=True))
             return 0
         if args.action in {"list", "ls"} and isinstance(public_payload, dict) and isinstance(public_payload.get("data"), list):
             print(f"{len(public_payload['data'])} secret binding(s)")
@@ -541,6 +541,8 @@ def _public_secret_binding(binding: dict[str, object]) -> dict[str, object]:
         public["source_type"] = source.split(":", 1)[0]
     elif isinstance(source, str):
         public["source_type"] = "unknown"
+    if "deleted" in binding:
+        public["deleted"] = binding.get("deleted")
     return public
 
 
