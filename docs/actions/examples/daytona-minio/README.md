@@ -57,11 +57,12 @@ trunks sandboxes providers add \
 trunks sandboxes providers test --name daytona --live
 ```
 
-## 5. Push
+## 5. Make a change and push
 
 ```bash
-git add .trunks/workflows/live-demo.yml app scripts README.md
-git commit -m "Add Trunks CI"
+echo "# my change" >> README.md
+git add README.md
+git commit -m "trigger CI"
 git push
 ```
 
