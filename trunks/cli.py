@@ -983,7 +983,7 @@ async def mount(
         "mount",
         {"path": str(target), "created": created, "watch": watch, "pulled": pulled},
     )
-    _print_shim_hint(repo)
+    _auto_install_shim()
     return 0
 
 
@@ -1351,15 +1351,28 @@ def init(name: str | None, backend: str | None) -> int:
     print(f"Remote      {repo.backend_url() or 'none (local-only)'}")
     if mirrors:
         print(f"Mirrors     {', '.join(mirrors)}")
-    _print_shim_hint(repo)
+    _auto_install_shim()
     return 0
 
 
-def _print_shim_hint(repo: Repository) -> None:
-    if not (repo.root / ".git").exists():
+def _auto_install_shim() -> None:
+    target_dir = Path.home() / ".local" / "bin"
+    target = target_dir / "git"
+    script = _shim_script()
+    if target.exists() and target.read_text(encoding="utf-8") == script:
         return
+    target_dir.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        backup = target.with_suffix(".bak")
+        target.rename(backup)
+    target.write_text(script, encoding="utf-8")
+    target.chmod(0o755)
+    _write_shim_marker()
     print()
-    print("Tip: run `trunks` to open a managed shell where `git push` syncs through Trunks.")
+    print(f"Git shim installed -> {target}")
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    if str(target_dir) not in path_dirs:
+        print(f'Add to PATH:  export PATH="{target_dir}:$PATH"')
 
 
 def config(action: str, key: str, value: str | None) -> int:
