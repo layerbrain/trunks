@@ -347,30 +347,10 @@ def _tag(repo: Repository, args: list[str]) -> int:
 
 
 def _remote(repo: Repository, args: list[str]) -> int:
-    if not args:
-        origin = repo.get_meta("git_origin") or repo.backend_url()
-        if origin:
-            print("origin")
-        return 0
     if args[:2] == ["add", "origin"] and len(args) >= 3:
         repo.set_meta("git_origin", args[2])
-        return 0
-    if args[:2] == ["get-url", "origin"]:
-        origin = repo.get_meta("git_origin") or repo.backend_url()
-        if not origin:
-            sys.stderr.write("error: No such remote 'origin'\n")
-            return 2
-        print(origin)
-        return 0
-    if args == ["-v"]:
-        origin = repo.get_meta("git_origin") or repo.backend_url()
-        if origin:
-            print(f"origin\t{origin} (fetch)")
-            print(f"origin\t{origin} (push)")
-        return 0
-    if tuple(args[:2]) in {("remove", "origin"), ("rm", "origin")}:
+    elif tuple(args[:2]) in {("remove", "origin"), ("rm", "origin")}:
         repo.delete_meta("git_origin")
-        return 0
     return _passthrough(["remote", *args])
 
 
