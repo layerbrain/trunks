@@ -23,7 +23,7 @@ from .backend_store import (
     workflow_run_job_ref,
     workflow_run_state_ref,
 )
-from .run import DEFAULT_CPU, DEFAULT_DISK_GIB, DEFAULT_MEMORY_GIB, run_command_async
+from .run import DEFAULT_CPU, DEFAULT_DISK_GIB, DEFAULT_MEMORY_GIB, enqueue_command, run_command_async
 
 
 _RUNS_ON_PRESETS: dict[str, dict[str, object]] = {
@@ -232,6 +232,68 @@ async def run_workflow(
         if any_failed:
             break
     workflow_run["phase"] = "failed" if any_failed else "succeeded"
+    _persist_workflow_run(repo, workflow_run)
+    return workflow_run
+
+
+def enqueue_workflow(
+    repo: Repository,
+    *,
+    workflow: str | None = None,
+    commit: str = "worktree",
+    cwd: str | None = None,
+    accept_best_effort: bool = False,
+    oidc_enabled: bool = False,
+) -> dict[str, object]:
+    root = Path(cwd or repo.root)
+    workflows = load_workflows(root, accept_best_effort=accept_best_effort, oidc_enabled=oidc_enabled)
+    selected = _select_workflow(workflows, workflow)
+    workflow_run: dict[str, object] = {
+        "_schema_version": WORKFLOW_RUN_SCHEMA,
+        "object": "workflow_run",
+        "id": ulid(),
+        "workflow": selected.to_dict(),
+        "commit": commit,
+        "phase": "pending",
+        "jobs": [],
+    }
+    for stage in _stages(selected.jobs):
+        for job in stage:
+            for index, variables in enumerate(job.matrix or ({},)):
+                command = _job_command(
+                    job,
+                    variables,
+                    context={
+                        "github.sha": commit,
+                        "github.run_id": str(workflow_run["id"]),
+                        "github.workflow": selected.name,
+                        "github.job": job.id,
+                    },
+                )
+                run = enqueue_command(
+                    repo,
+                    command,
+                    commit=commit,
+                    spec=job.spec,
+                    provider_id=job.provider_id,
+                    strict_provider=job.strict_provider,
+                    region=job.region,
+                    isolation=job.isolation,
+                    timeout_s=job.timeout_s,
+                    artifact_paths=_job_artifacts(job, variables),
+                )
+                payload = run.to_dict()
+                workflow_run["jobs"].append(
+                    {
+                        "job": job.id,
+                        "name": job.name,
+                        "matrix_index": index,
+                        "matrix": variables,
+                        "run": payload["id"],
+                        "phase": "pending",
+                    }
+                )
+                _persist_workflow_job_pointer(repo, str(workflow_run["id"]), job.id, str(payload["id"]), index=index)
     _persist_workflow_run(repo, workflow_run)
     return workflow_run
 
