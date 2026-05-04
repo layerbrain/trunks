@@ -7,7 +7,7 @@ The code is already here. You just configure storage, add Daytona, and push.
 ## Prerequisites
 
 - Docker (for MinIO)
-- Trunks CLI installed with the git shim (`trunks shim install`)
+- `pip install trunks`
 - A Daytona API key
 
 ## 1. Start MinIO
@@ -22,11 +22,11 @@ docker run -d --rm \
   server /data --console-address :9001
 ```
 
-## 2. Init the repo
+## 2. Mount the repo
 
 ```bash
 cd docs/actions/examples/daytona-minio
-trunks init --name daytona-minio-demo
+trunks mount --repo daytona-minio-demo
 ```
 
 ## 3. Add storage
