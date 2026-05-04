@@ -316,6 +316,9 @@ async def dispatch(argv: list[str]) -> int:
             return cmd_checkout(args.name, args.create)
         if args.command == "shim":
             return shim(args.action, args.dest)
+        if args.command is None:
+            parser.print_help()
+            return 0
         return shell(args.backend)
     except TrunksError as exc:
         print(f"trunks: {exc}", file=sys.stderr)
@@ -2367,7 +2370,8 @@ def shell(backend: str | None) -> int:
         return 1
     repo = _repo_or_init(backend=backend)
     GitCache(repo).rebuild()
-    print("Welcome to Trunks 0.1")
+    from .version import __version__
+    print(f"Welcome to Trunks {__version__}")
     print()
     print(f"Repository  {repo.name}")
     print(f"Branch      {repo.current_branch}")
