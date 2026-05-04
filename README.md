@@ -179,6 +179,7 @@ List calls return the same envelope everywhere:
 | Resource shapes | [Resources](docs/resources.md) |
 | Pick a backend | [Backends](docs/backends/README.md) |
 | Use Trunks with agent frameworks | [Agents](docs/agents.md) |
+| Run CI on your own infrastructure | [Trunks Actions](docs/actions.md) |
 | Understand the bytes | [Architecture](docs/architecture.md) |
 
 Backend guides:
@@ -201,5 +202,9 @@ Examples:
 - [E2B](examples/e2b-sandbox/README.md)
 - [Daytona](examples/daytona-sandbox/README.md)
 - [Blaxel](examples/blaxel-sandbox/README.md)
+
+Actions:
+
+- [Daytona + MinIO](docs/actions/examples/daytona-minio/README.md)
 
 MIT licensed.
