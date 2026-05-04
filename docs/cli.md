@@ -38,6 +38,8 @@ git remote add backup trunks+s3://company-trunks-backup/trunks/my-app.trunk
 ```bash
 trunks mount --repo my-app --path ./my-app
 trunks mount --repo my-app --path ./my-app --watch
+trunks mount --repo my-app --path ./my-app --storage primary
+trunks mount --repo my-app --path ./my-app --no-git
 trunks mount --repo big-repo --path ./big-repo --mode virtual
 trunks unmount --path ./my-app
 trunks repo create --name my-app --backend s3://company-trunks --json
@@ -50,6 +52,13 @@ trunks doctor --path ./my-app --ping --json
 ```
 
 Default mount uses a real directory. `--mode virtual` sparsely materializes large repos.
+
+`trunks mount` also bootstraps git: if no `.git` exists at the mount path it
+runs `git init --initial-branch=main`, and if no `origin` remote is configured
+it adds `origin -> trunks://<storage>/<repo>` using the single configured
+primary storage profile. Pass `--storage <name>` to pick one explicitly when
+multiple primaries exist; pass `--no-git` to skip the bootstrap entirely.
+Existing non-trunks origins are preserved.
 
 ## Versioning
 

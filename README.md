@@ -23,19 +23,17 @@ npm install @layerbrain/trunks
 ## Quick Start
 
 ```bash
+trunks storage add --name primary --backend local --path /tmp/trunks-store
 mkdir my-app
 cd my-app
-git init --initial-branch=main
-trunks init --name my-app
-trunks storage add primary --backend local --path /tmp/trunks-store
-git remote add origin trunks://primary/my-app
+trunks mount --repo my-app
 echo "hello" > README.md
 git add README.md
 git commit -m "init"
 git push -u origin main
 ```
 
-That's it. `origin` is a normal Git remote backed by Trunks storage. Another machine can run `git clone trunks://primary/my-app`.
+That's it. `trunks mount` initializes `.git` and wires `origin -> trunks://primary/my-app` for you. Another machine can run `git clone trunks://primary/my-app`.
 
 S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
 
@@ -78,10 +76,13 @@ Trunks keeps Git's commit objects and refs, drops the server, and writes straigh
 ```bash
 trunks mount --repo my-app --path ./my-app
 trunks mount --repo my-app --path ./my-app --watch
+trunks mount --repo my-app --path ./my-app --storage primary
 trunks mount --repo big-repo --path ./big-repo --mode virtual
 ```
 
 Default is plain files. `--watch` keeps a journal so a crash doesn't lose work. `--mode virtual` sparsely materializes huge repos.
+
+`trunks mount` also bootstraps git: it runs `git init --initial-branch=main` if `.git` is missing and adds `origin -> trunks://<storage>/<repo>` if no `origin` is configured. With one primary storage profile this is automatic; pass `--storage <name>` if you have several. Pass `--no-git` to skip the bootstrap.
 
 ## Branches Are Pointers
 

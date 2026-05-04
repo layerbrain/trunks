@@ -22,14 +22,7 @@ docker run -d --rm \
   server /data --console-address :9001
 ```
 
-## 2. Mount the repo
-
-```bash
-cd docs/actions/examples/daytona-minio
-trunks mount --repo daytona-minio-demo
-```
-
-## 3. Add storage
+## 2. Add storage
 
 ```bash
 trunks storage add \
@@ -46,6 +39,18 @@ trunks storage ping --name minio
 
 For production, swap MinIO for S3, R2, Tigris, Spaces, or any S3-compatible backend.
 
+## 3. Mount the repo
+
+```bash
+cd docs/actions/examples/daytona-minio
+trunks mount --repo daytona-minio-demo
+```
+
+`trunks mount` initializes `.git` if it isn't already a git repo and wires
+`origin -> trunks://minio/daytona-minio-demo` automatically. No `git init`, no
+`git remote add` needed. If you have multiple primary storage profiles, pass
+`--storage minio` to pick one explicitly.
+
 ## 4. Add Daytona
 
 ```bash
@@ -57,13 +62,12 @@ trunks sandboxes providers add \
 trunks sandboxes providers test --name daytona --live
 ```
 
-## 5. Make a change and push
+## 5. Commit and push
 
 ```bash
-echo "# my change" >> README.md
-git add README.md
+git add .
 git commit -m "trigger CI"
-git push
+git push -u origin main
 ```
 
 The `on: push` trigger fires automatically. Trunks routes the job to Daytona, runs it in a container, writes logs and artifacts to MinIO, and destroys the sandbox.

@@ -18,6 +18,7 @@ from .config import (
     backend_from_env,
     env_forces_local_only,
     get_storage_profile as get_global_storage_profile,
+    load_storage_profiles as load_global_storage_profiles,
     mirror_backends_from_env,
     mirror_policy_from_env,
     push_mode_from_env,
@@ -65,6 +66,16 @@ async def dispatch(argv: list[str]) -> int:
     mount_p.add_argument("--repo", required=True, help="logical repo name, for example my-app or acme/my-app")
     mount_p.add_argument("--path", default=None, help="local mount path")
     mount_p.add_argument("--backend", default=None, help="optional backend URL/base for this repo")
+    mount_p.add_argument(
+        "--storage",
+        default=None,
+        help="storage profile name from ~/.trunks/config used to wire the git remote (defaults to the single configured primary)",
+    )
+    mount_p.add_argument(
+        "--no-git",
+        action="store_true",
+        help="do not initialize .git or wire the trunks remote at the mount path",
+    )
     mount_p.add_argument("--require-existing", action="store_true", help="fail if --path is not already a Trunks repo")
     mount_p.add_argument(
         "--mode",
@@ -230,6 +241,8 @@ async def dispatch(argv: list[str]) -> int:
                 require_existing=args.require_existing,
                 mode=args.mode,
                 watch=args.watch,
+                storage=args.storage,
+                no_git=args.no_git,
             )
         if args.command == "repo":
             return repo_cmd(
@@ -932,6 +945,8 @@ async def mount(
     require_existing: bool = False,
     mode: str = "disk",
     watch: bool = False,
+    storage: str | None = None,
+    no_git: bool = False,
 ) -> int:
     if mode == "virtual":
         if watch:
@@ -974,6 +989,18 @@ async def mount(
     finally:
         os.chdir(cwd)
 
+    git_status: str | None = None
+    remote_status: str | None = None
+    remote_url: str | None = None
+    storage_hint: str | None = None
+    if not no_git:
+        chosen_storage, storage_hint = _resolve_mount_storage(storage)
+        if chosen_storage:
+            boot = _bootstrap_git_remote(target, repo_name, chosen_storage)
+            git_status = boot["git"]
+            remote_status = boot["remote"]
+            remote_url = boot["url"]
+
     print("Mounted Trunks repository")
     print()
     print(f"Repository  {repo.name}")
@@ -982,15 +1009,86 @@ async def mount(
     print(f"Status      {'created' if created else 'opened'}")
     if pulled:
         print("Sync        pulled")
+    if git_status is not None:
+        print(f"Git         {git_status}")
+        if remote_status == "added":
+            print(f"Origin      added -> {remote_url}")
+        elif remote_status == "exists":
+            print(f"Origin      already trunks ({remote_url})")
+        elif remote_status == "conflict":
+            print(f"Origin      kept ({remote_url}); not overwriting")
+    elif not no_git and storage_hint:
+        print(f"Origin      not wired ({storage_hint})")
     if watch:
         runtime = repo_runtime.start(repo)
         print(f"Watcher     running pid {runtime.pid}")
     audit.record(
         repo,
         "mount",
-        {"path": str(target), "created": created, "watch": watch, "pulled": pulled},
+        {
+            "path": str(target),
+            "created": created,
+            "watch": watch,
+            "pulled": pulled,
+            "git": git_status,
+            "remote": remote_status,
+            "remote_url": remote_url,
+        },
     )
     return 0
+
+
+def _resolve_mount_storage(name: str | None) -> tuple[str | None, str | None]:
+    profiles = load_global_storage_profiles()
+    if name:
+        for profile in profiles:
+            if profile.name == name:
+                return name, None
+        return None, (
+            f"storage profile {name!r} not found in ~/.trunks/config "
+            f"(run: trunks storage add --name {name} ...)"
+        )
+    primaries = [profile for profile in profiles if profile.role == "primary"]
+    if len(primaries) == 1:
+        return primaries[0].name, None
+    if not primaries:
+        return None, (
+            "no storage configured (run: trunks storage add --name <name> ... "
+            "to wire the trunks remote automatically)"
+        )
+    names = ", ".join(profile.name for profile in primaries)
+    return None, f"multiple primary storages configured ({names}); pass --storage <name>"
+
+
+def _bootstrap_git_remote(target: Path, repo_name: str, storage_name: str) -> dict[str, str]:
+    git_bin = find_system_git()
+    if git_bin is None:
+        raise TrunksError(GIT_NOT_FOUND_MESSAGE)
+    git_dir = target / ".git"
+    if git_dir.exists():
+        git_status = "exists"
+    else:
+        subprocess.run(
+            [git_bin, "-C", str(target), "init", "--initial-branch=main", "-q"],
+            check=True,
+        )
+        git_status = "created"
+    desired_url = f"trunks://{storage_name}/{repo_name}"
+    existing = subprocess.run(
+        [git_bin, "-C", str(target), "remote", "get-url", "origin"],
+        capture_output=True,
+        text=True,
+    )
+    if existing.returncode != 0:
+        subprocess.run(
+            [git_bin, "-C", str(target), "remote", "add", "origin", desired_url],
+            check=True,
+        )
+        return {"git": git_status, "remote": "added", "url": desired_url}
+    current_url = existing.stdout.strip()
+    if current_url == desired_url:
+        return {"git": git_status, "remote": "exists", "url": desired_url}
+    return {"git": git_status, "remote": "conflict", "url": current_url}
 
 
 async def unmount(path: str | None) -> int:

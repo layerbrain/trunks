@@ -8,13 +8,15 @@ Mount Trunks inside E2B so repo state survives sandbox destruction.
 python3 -m pip install trunks
 
 export TRUNKS_REPO=my-app
-export TRUNKS_BACKEND=s3://company-agent-repos
 export TRUNKS_PATH=/workspace/my-app
 
-trunks mount --repo "$TRUNKS_REPO" --path "$TRUNKS_PATH" --backend "$TRUNKS_BACKEND" --watch
+trunks storage add --name primary --backend s3 --bucket company-agent-repos
+trunks mount --repo "$TRUNKS_REPO" --path "$TRUNKS_PATH" --watch
 cd "$TRUNKS_PATH"
 trunks pull
 ```
+
+`trunks mount` initializes `.git` and wires `origin -> trunks://primary/$TRUNKS_REPO` automatically.
 
 ## Save
 

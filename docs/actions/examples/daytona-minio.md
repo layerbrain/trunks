@@ -23,14 +23,7 @@ docker run -d --rm \
   server /data --console-address :9001
 ```
 
-## 2. Mount The Example Repo
-
-```bash
-cd docs/actions/examples/daytona-minio
-trunks mount --repo daytona-minio-demo
-```
-
-## 3. Configure Trunks Storage
+## 2. Configure Trunks Storage
 
 ```bash
 trunks storage add \
@@ -48,6 +41,17 @@ trunks storage ping --name minio
 For a hosted S3-compatible backend, keep the same command shape and change
 `--bucket`, `--endpoint`, `--region`, `--access-key`, and `--secret-key`.
 
+## 3. Mount The Example Repo
+
+```bash
+cd docs/actions/examples/daytona-minio
+trunks mount --repo daytona-minio-demo
+```
+
+`trunks mount` initializes `.git` if missing and wires `origin ->
+trunks://minio/daytona-minio-demo`. No `git init`, no `git remote add` — pass
+`--storage minio` if you have multiple primary storage profiles.
+
 ## 4. Add Daytona
 
 ```bash
@@ -62,16 +66,15 @@ trunks sandboxes providers test --name daytona --live
 Provider credentials are stored in local Trunks config. They are not written to
 the repo.
 
-## 5. Make A Change And Push
+## 5. Commit And Push
 
-The workflow, app, and scripts are already in the example directory. Make any
-change and push:
+The workflow, app, and scripts are already in the example directory. Stage,
+commit, and push:
 
 ```bash
-echo "# my change" >> README.md
-git add README.md
+git add .
 git commit -m "trigger CI"
-git push
+git push -u origin main
 ```
 
 Trunks sees the push, creates the workflow run, routes the job to Daytona, writes
