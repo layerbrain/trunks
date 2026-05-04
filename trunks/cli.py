@@ -1318,8 +1318,7 @@ def _pid_exists(pid: int) -> bool:
 def _mount_path(repo_name: str, path: str | None) -> Path:
     if path:
         return Path(path).expanduser().resolve()
-    name = repo_name.rstrip("/").split("/")[-1] or "repo"
-    return (Path.cwd() / name).resolve()
+    return Path.cwd().resolve()
 
 
 def _backend_for_repo_name(repo_name: str, backend: str | None) -> str | None:
