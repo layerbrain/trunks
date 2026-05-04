@@ -54,9 +54,9 @@ jobs:
 
             workflow_runs = list_workflow_runs(repo)
             self.assertEqual(len(workflow_runs), 1)
-            self.assertEqual(workflow_runs[0]["phase"], "succeeded")
+            self.assertEqual(workflow_runs[0]["phase"], "pending")
             self.assertEqual(workflow_runs[0]["commit"], str(commit.id))
-            self.assertEqual(workflow_runs[0]["jobs"][0]["phase"], "succeeded")
+            self.assertEqual(workflow_runs[0]["jobs"][0]["phase"], "pending")
 
 
 if __name__ == "__main__":

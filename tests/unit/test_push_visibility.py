@@ -3,14 +3,14 @@ Regression test for the silent-push bug.
 
 Reproduction:
 - A trunks repo has a remote configured (so trunks push isn't a noop early-exit)
-- BUT the local trunks SQLite has zero refs (the gitshim never copied anything in,
-  e.g. because the user ran git push outside the trunks-managed shell)
+- BUT the local trunks SQLite has zero refs because nothing has committed into
+  Trunks yet
 - `trunks push` previously printed nothing and exited 0 — looks identical to a
   successful 7-commit push to the user. Bytes silently land nowhere.
 
 This test asserts:
 1. Push.run() returns a PushResult with all-zero counts in that case.
-2. The CLI `run_trunk("push")` prints a clear "did you commit through the gitshim?"
+2. The CLI `run_trunk("push")` prints a clear "commit first"
    message instead of staying silent.
 """
 
@@ -69,7 +69,7 @@ class PushVisibilityTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(rc, 0)
                 output = out.getvalue()
                 self.assertIn("Nothing to push", output)
-                self.assertIn("gitshim", output)
+                self.assertIn("trunks shell", output)
             finally:
                 os.chdir(cwd)
 

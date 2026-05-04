@@ -96,12 +96,12 @@ Virtual mount starts a local filesystem daemon. The folder behaves like a real f
 
 ```bash
 cd ./my-app
-trunks
+trunks shell
 git commit -m "update auth"
 git push
 ```
 
-The `trunks` shell sets `GIT_DIR` and a remote URL that points at Trunks' Git shim. Git sees a normal repo. Trunks writes the same objects and the same refs as `trunks checkpoint` would have.
+`trunks shell` opens a shell with Trunks Git interop enabled. It creates a `.git` cache only when Trunks owns that cache; existing real Git repositories are left alone. Trunks writes the same objects and refs as `trunks checkpoint` would have.
 
 You can read the repo with `git log`, diff with `git diff`, or never touch Git.
 

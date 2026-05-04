@@ -22,6 +22,7 @@ def cwd(path: Path):
         "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
         "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
         "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
+        "TRUNKS_ACTIVE": os.environ.get("TRUNKS_ACTIVE"),
     }
     os.environ.update(
         {
@@ -29,6 +30,7 @@ def cwd(path: Path):
             "GIT_AUTHOR_EMAIL": "brain@layerbrain.com",
             "GIT_COMMITTER_NAME": "Brain",
             "GIT_COMMITTER_EMAIL": "brain@layerbrain.com",
+            "TRUNKS_ACTIVE": "1",
         }
     )
     try:

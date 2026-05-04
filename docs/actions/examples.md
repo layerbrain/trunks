@@ -14,7 +14,7 @@ python examples/actions/headless-ci-runner.py --repo /path/to/repo --command "py
 
 It queues a run, starts one executor, streams live logs through the watch API, and exits with the job result. It is useful for app integrations, local demos, and proving the lifecycle without running a server.
 
-The example uses the same Actions queue, leases, logs, and watch API as workflow-triggered runs. In normal CI usage, `.trunks/workflows/*.yml` files with `on: push` start automatically when `git push` goes through the Trunks git shim. For multiple hosts, point every executor at the same configured Trunks storage backend so they share `refs/actions/repos/<repo>/...`.
+The example uses the same Actions queue, leases, logs, and watch API as workflow-triggered runs. In normal CI usage, `.trunks/workflows/*.yml` files with `on: push` start automatically when `git push` runs inside `trunks shell`. For multiple hosts, point every executor at the same configured Trunks storage backend so they share `refs/actions/repos/<repo>/...`.
 
 ## Daytona + MinIO Live Demo
 

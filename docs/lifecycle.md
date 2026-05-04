@@ -52,10 +52,11 @@ Checkpoint is local. Nothing has gone over the network yet.
 ## 4. Push
 
 ```bash
+trunks shell
 git push
 ```
 
-When the Trunks git shim handles `git push`, it uploads missing objects and advances the backend ref with compare-and-swap.
+When `git push` runs inside `trunks shell`, Trunks uploads missing objects and advances the backend ref with compare-and-swap.
 
 ```text
 local objects → backend objects   (one PUT per missing blob/tree/commit)

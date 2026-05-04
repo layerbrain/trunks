@@ -50,7 +50,7 @@ class InitShimHintTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 os.chdir(cwd)
 
-    async def test_init_with_existing_git_dir_points_to_managed_shell(self) -> None:
+    async def test_init_with_existing_git_dir_does_not_print_git_interop_hint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
             root = Path(tmp)
             (root / ".git").mkdir()
@@ -63,7 +63,7 @@ class InitShimHintTests(unittest.IsolatedAsyncioTestCase):
                     out = io.StringIO()
                     with redirect_stdout(out):
                         self.assertEqual(await dispatch(["init"]), 0)
-                    self.assertIn("run `trunks` to open a managed shell", out.getvalue())
+                    self.assertNotIn("managed shell", out.getvalue())
                     self.assertNotIn("trunks shim install", out.getvalue())
             finally:
                 os.chdir(cwd)

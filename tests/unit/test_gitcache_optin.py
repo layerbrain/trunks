@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from trunks.cli import dispatch
-from trunks.gitcache import GitCache, _shim_marker_path
+from trunks.gitcache import GitCache, MANAGED_GIT_MARKER, _shim_marker_path
 from trunks.repository import Repository
 
 
@@ -48,11 +48,12 @@ class GitCacheOptInTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 os.chdir(cwd)
 
-    async def test_existing_git_dir_keeps_being_maintained(self) -> None:
+    async def test_existing_git_dir_is_treated_as_foreign_git_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
             root = Path(tmp)
             (root / ".git").mkdir()
             (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+            (root / ".git" / "config").write_text("[core]\n\tbare = false\n", encoding="utf-8")
             cwd = Path.cwd()
             os.chdir(root)
             try:
@@ -61,12 +62,14 @@ class GitCacheOptInTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(await dispatch(["init"]), 0)
                         (root / "a.md").write_text("a\n", encoding="utf-8")
                         self.assertEqual(await dispatch(["checkpoint", "-m", "init"]), 0)
-                self.assertTrue((root / ".git" / "objects").exists(), "GitCache should populate .git/ when it pre-existed")
-                self.assertTrue((root / ".git" / "config").exists())
+                        GitCache(Repository.find(root)).rebuild(force=True)
+                self.assertFalse((root / ".git" / "objects").exists())
+                self.assertFalse((root / ".git" / MANAGED_GIT_MARKER).exists())
+                self.assertEqual((root / ".git" / "config").read_text(encoding="utf-8"), "[core]\n\tbare = false\n")
             finally:
                 os.chdir(cwd)
 
-    async def test_shim_marker_enables_git_cache(self) -> None:
+    async def test_shim_marker_does_not_materialize_git_cache_by_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:
             root = Path(tmp)
             cwd = Path.cwd()
@@ -81,10 +84,20 @@ class GitCacheOptInTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(await dispatch(["init"]), 0)
                         (root / "a.md").write_text("a\n", encoding="utf-8")
                         self.assertEqual(await dispatch(["checkpoint", "-m", "init"]), 0)
-                self.assertTrue((root / ".git").exists(), "shim marker should opt-in to GitCache.rebuild()")
-                self.assertTrue((root / ".git" / "objects").exists())
+                self.assertFalse((root / ".git").exists())
             finally:
                 os.chdir(cwd)
+
+    def test_force_rebuild_creates_trunks_managed_git_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = Repository.init(root)
+            cache = GitCache(repo)
+
+            cache.rebuild(force=True)
+
+            self.assertTrue((root / ".git" / MANAGED_GIT_MARKER).exists())
+            self.assertTrue((root / ".git" / "objects").exists())
 
     def test_gitcache_short_circuits_without_optin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as fake_home:

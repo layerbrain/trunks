@@ -13,7 +13,7 @@ jobs:
       - run: python3.12 -m unittest
 ```
 
-`git push` through the Trunks shim publishes the commit closure to storage and starts every workflow whose `on:` matches.
+`git push` inside `trunks shell` publishes the commit closure to storage and starts every workflow whose `on:` matches.
 
 ## What's supported
 
@@ -50,6 +50,7 @@ Override unsupported `uses:` with `--accept-best-effort` to make Trunks treat th
 ```bash
 trunks actions migrate .github/workflows/ci.yml
 trunks actions workflows lint --json
+trunks shell
 git add .trunks/workflows
 git commit -m "Move CI to Trunks"
 git push
@@ -73,7 +74,7 @@ trunks actions workflow-runs --id <id> logs --json
 
 ## Triggers
 
-`on: push` fires when the Trunks git shim advances a branch ref. `workflow_dispatch` runs the workflow on demand:
+`on: push` fires when Trunks advances a branch ref. `workflow_dispatch` runs the workflow on demand:
 
 ```bash
 trunks actions run <workflow-name> --json

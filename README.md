@@ -7,6 +7,7 @@ The most powerful open-source POSIX-compatible, Git-native filesystem.
 Applications write normal files. Developers run normal Git.
 
 ```bash
+trunks shell
 git checkout -b feature/auth
 git add .
 git commit -m "update auth"
@@ -28,7 +29,7 @@ npm install @layerbrain/trunks
 trunks mount --repo my-app --backend s3://company-trunks --path ./my-app
 ```
 
-That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. `git push` through the Trunks shim syncs to your bucket. Another machine runs the same `mount` and sees the same files.
+That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. Run `trunks shell` when you want Git commands to sync through Trunks. Another machine runs the same `mount` and sees the same files.
 
 S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
 
@@ -60,7 +61,7 @@ Trunks keeps Git's commit objects and refs, drops the server, and writes straigh
 ## What You Get
 
 - **Real files.** Tools read and write with `cat`, `vim`, `grep`, `npm`, `python`. The SDKs are a convenience, not a requirement.
-- **Real Git.** Every checkpoint is a Git commit object. `git log`, `git diff`, `git blame` all work. So does `git push` through the Trunks shim.
+- **Real Git.** Every checkpoint is a Git commit object. Inside `trunks shell`, `git log`, `git diff`, `git blame`, and `git push` operate on the Trunks repo.
 - **Real concurrency.** Branches are pointers. Different branches never collide. Same branch is one CAS. One writer wins, the others retry.
 - **Real backends.** S3, R2, Tigris, GCS, Azure Blob, MinIO, Postgres, SFTP, fileshare, local disk. Each one passes the same multi-commit, branch, merge, and CAS-conflict contract test.
 - **Real scale.** Virtual mode mounts a 100GB repo without materializing it.
@@ -83,6 +84,7 @@ One branch per task. Creating one is a single ref write. No copy.
 ```bash
 trunks branch create --name feature/auth --from main
 trunks branch switch --name feature/auth
+trunks shell
 git add .
 git commit -m "update auth"
 git push

@@ -17,7 +17,7 @@ TRUNKS_SRC = str(Path(__file__).resolve().parents[2])
 
 
 def run_gitshim(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "PYTHONPATH": TRUNKS_SRC}
+    env = {**os.environ, "PYTHONPATH": TRUNKS_SRC, "TRUNKS_ACTIVE": "1"}
     return subprocess.run(
         [sys.executable, "-m", "trunks.gitshim", *args],
         cwd=root,

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import AsyncIterator
+
 from .backend import Backend
 from .errors import BackendUnavailable
 from .ids import ObjectId
-from typing import AsyncIterator
-
 from .objects import Commit, Identity
 from .repository import Repository, Status
 
@@ -120,7 +124,9 @@ class Engine:
         if result.refs_pushed:
             from .actions.triggers import run_push_workflows
 
-            await run_push_workflows(self.repository, commit=str(push_payload["head"]), branch=push_payload["branch"])
+            workflow_runs = await run_push_workflows(self.repository, commit=str(push_payload["head"]), branch=push_payload["branch"])
+            if workflow_runs:
+                _spawn_executor(self.repository, workflow_runs)
         return result
 
     async def log(self, *, branch: str | None = None, limit: int = 50) -> AsyncIterator[Commit]:
@@ -134,3 +140,27 @@ class Engine:
 
     async def log_list(self, *, branch: str | None = None, limit: int = 50) -> list[Commit]:
         return [commit async for commit in self.log(branch=branch, limit=limit)]
+
+
+def _spawn_executor(repo: Repository, workflow_runs: list[dict[str, object]]) -> None:
+    run_ids = []
+    for wf_run in workflow_runs:
+        for job in wf_run.get("jobs", []):
+            run_id = job.get("run")
+            if run_id and job.get("phase") == "pending":
+                run_ids.append(str(run_id))
+    if not run_ids:
+        return
+    env = os.environ.copy()
+    package_parent = str(Path(__file__).resolve().parent.parent)
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = f"{package_parent}{os.pathsep}{existing}" if existing else package_parent
+    for run_id in run_ids:
+        subprocess.Popen(
+            [sys.executable, "-m", "trunks.cli", "actions", "execute", "--run-id", run_id],
+            cwd=str(repo.root),
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )

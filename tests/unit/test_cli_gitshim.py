@@ -12,8 +12,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 from trunks.cli import dispatch, shim
-from trunks.actions.artifacts import get_artifact
-from trunks.actions.storage import load_run
 from trunks.actions.workflow import list_workflow_runs
 from trunks.gitshim import main as git_main
 from trunks.repository import Repository
@@ -22,10 +20,16 @@ from trunks.repository import Repository
 @contextmanager
 def cwd(path: Path):
     previous = Path.cwd()
+    previous_active = os.environ.get("TRUNKS_ACTIVE")
     os.chdir(path)
+    os.environ["TRUNKS_ACTIVE"] = "1"
     try:
         yield
     finally:
+        if previous_active is None:
+            os.environ.pop("TRUNKS_ACTIVE", None)
+        else:
+            os.environ["TRUNKS_ACTIVE"] = previous_active
         os.chdir(previous)
 
 
@@ -90,7 +94,7 @@ jobs:
                 repo = Repository.find(root)
                 workflow_runs = list_workflow_runs(repo)
                 self.assertEqual(len(workflow_runs), 1)
-                self.assertEqual(workflow_runs[0]["phase"], "succeeded")
+                self.assertEqual(workflow_runs[0]["phase"], "pending")
                 self.assertEqual(workflow_runs[0]["workflow"]["name"], "CI")
 
     async def test_installed_git_command_push_triggers_trunks_workflow_push_actions(self) -> None:
@@ -132,6 +136,7 @@ jobs:
                 "HOME": fake_home,
                 "XDG_CONFIG_HOME": str(Path(fake_home) / ".config"),
                 "PATH": f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+                "TRUNKS_ACTIVE": "1",
             }
             for args in (["git", "add", "."], ["git", "commit", "-m", "add ci"], ["git", "push"]):
                 result = subprocess.run(args, cwd=root, env=env, text=True, capture_output=True, timeout=30)
@@ -140,13 +145,8 @@ jobs:
             repo = Repository.find(root)
             workflow_runs = list_workflow_runs(repo)
             self.assertEqual(len(workflow_runs), 1)
-            self.assertEqual(workflow_runs[0]["phase"], "succeeded")
+            self.assertEqual(workflow_runs[0]["phase"], "pending")
             self.assertEqual(workflow_runs[0]["workflow"]["name"], "CI")
-            run_id = workflow_runs[0]["jobs"][0]["run"]
-            job_run = load_run(repo, run_id)
-            self.assertEqual(job_run["state"]["provider"], "local")
-            self.assertEqual(job_run["result"]["exit_code"], 0)
-            self.assertEqual(get_artifact(repo, run_id, "provider-marker.txt"), b"installed-git-triggered")
 
     async def test_git_branch_verbose_does_not_create_dash_vv_branch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -163,7 +163,7 @@ jobs:
                 self.assertIn("refs/heads/main", refs)
                 self.assertNotIn("refs/heads/-vv", refs)
 
-    async def test_trunks_backend_is_visible_as_origin_for_read_only_git_commands(self) -> None:
+    async def test_trunks_backend_is_visible_as_origin_without_remote_tracking_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as remote:
             root = Path(tmp)
             remote_root = Path(remote) / "repo.trunk"
@@ -179,11 +179,38 @@ jobs:
                 with redirect_stdout(remote_out):
                     self.assertEqual(git_main(["remote", "-v"]), 0)
                 self.assertIn(f"origin\tlocal://{remote_root}", remote_out.getvalue())
+                self.assertFalse((root / ".git" / "refs" / "remotes").exists())
 
-                log_out = StringIO()
-                with redirect_stdout(log_out):
-                    self.assertEqual(git_main(["log", "origin/main", "-1", "--oneline"]), 0)
-                self.assertTrue((root / ".git" / "refs" / "remotes" / "origin" / "main").exists())
+    async def test_installed_shim_passes_through_real_git_repo_even_with_trunks_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as shim_dir, tempfile.TemporaryDirectory() as fake_home:
+            root = Path(tmp)
+            system_git = "/usr/bin/git" if Path("/usr/bin/git").exists() else "git"
+            subprocess.run([system_git, "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.DEVNULL)
+            Repository.init(cwd=root, name="repo")
+            with patch.dict(os.environ, {"HOME": fake_home, "XDG_CONFIG_HOME": str(Path(fake_home) / ".config")}, clear=False):
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(shim("install", shim_dir), 0)
+            env = {
+                **os.environ,
+                "HOME": fake_home,
+                "XDG_CONFIG_HOME": str(Path(fake_home) / ".config"),
+                "PATH": f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+            }
+
+            result = subprocess.run(
+                ["git", "remote", "add", "origin", "https://github.com/example/site.git"],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=f"{result.stderr}\n{result.stdout}")
+            remote = subprocess.check_output([system_git, "remote", "get-url", "origin"], cwd=root, text=True).strip()
+            self.assertEqual(remote, "https://github.com/example/site.git")
+            self.assertFalse((root / ".git" / "trunks-managed").exists())
+            self.assertIsNone(Repository.find(root).get_meta("git_origin"))
 
     async def test_init_imports_existing_git_repository(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -210,7 +237,7 @@ jobs:
             with cwd(Path(tmp)), patch.dict(os.environ, {"PATH": ""}, clear=False):
                 err = StringIO()
                 with redirect_stderr(err):
-                    rc = await dispatch([])
+                    rc = await dispatch(["shell"])
                 self.assertEqual(rc, 1)
                 self.assertIn("Git was not found.", err.getvalue())
                 self.assertIn("xcode-select --install", err.getvalue())

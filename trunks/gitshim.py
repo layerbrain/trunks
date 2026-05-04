@@ -10,23 +10,28 @@ from pathlib import Path
 
 from .config import mirror_policy_from_env, push_mode_from_env
 from .errors import InvalidPath, RefConflict, RepositoryNotFound
-from .gitcache import GitCache, system_git
+from .gitcache import GitCache, is_foreign_git_dir, is_trunks_managed_git_dir, system_git
 from .ids import ObjectId
 from .repository import Repository
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if os.environ.get("TRUNKS_BYPASS") in {"1", "true", "yes", "on"}:
+    original_argv = list(argv)
+    if _env_flag("TRUNKS_BYPASS"):
         return _passthrough(argv)
     if not argv:
         return _passthrough(argv)
+    leading, argv = _split_global_options(argv)
+    if _uses_explicit_git_location(leading):
+        return _passthrough(original_argv)
     try:
         repo = Repository.find()
     except (RepositoryNotFound, OSError):
-        return _passthrough(argv)
+        return _passthrough(original_argv)
+    if not _should_handle(repo):
+        return _passthrough(original_argv)
 
-    leading, argv = _split_global_options(argv)
     if not argv:
         return _passthrough(leading)
     command = argv[0]
@@ -110,6 +115,29 @@ def _split_global_options(argv: list[str]) -> tuple[list[str], list[str]]:
     return leading, rest
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name) in {"1", "true", "yes", "on"}
+
+
+def _uses_explicit_git_location(leading: list[str]) -> bool:
+    return any(
+        option == "-C"
+        or option.startswith("-C=")
+        or option == "--git-dir"
+        or option.startswith("--git-dir=")
+        or option == "--work-tree"
+        or option.startswith("--work-tree=")
+        for option in leading
+    )
+
+
+def _should_handle(repo: Repository) -> bool:
+    git_dir = repo.root / ".git"
+    if is_foreign_git_dir(git_dir):
+        return False
+    return _env_flag("TRUNKS_ACTIVE") or is_trunks_managed_git_dir(git_dir)
+
+
 def _status(repo: Repository) -> int:
     status = repo.status(compare_worktree=True)
     print(f"On branch {status.branch}")
@@ -136,6 +164,7 @@ def _add(repo: Repository, args: list[str]) -> int:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=_system_git_env(),
         check=False,
     )
     if result.stdout:
@@ -347,11 +376,33 @@ def _tag(repo: Repository, args: list[str]) -> int:
 
 
 def _remote(repo: Repository, args: list[str]) -> int:
+    if args in ([], ["-v"]):
+        return _print_remote(repo, verbose=args == ["-v"])
     if args[:2] == ["add", "origin"] and len(args) >= 3:
         repo.set_meta("git_origin", args[2])
-    elif tuple(args[:2]) in {("remove", "origin"), ("rm", "origin")}:
-        repo.delete_meta("git_origin")
+        GitCache(repo).rebuild(force=True)
+        return 0
+    if tuple(args[:2]) in {("remove", "origin"), ("rm", "origin")}:
+        GitCache(repo).rebuild(force=True)
+        code = _passthrough(["remote", *args])
+        if code == 0:
+            repo.delete_meta("git_origin")
+            GitCache(repo).rebuild(force=True)
+        return code
+    GitCache(repo).rebuild(force=True)
     return _passthrough(["remote", *args])
+
+
+def _print_remote(repo: Repository, *, verbose: bool) -> int:
+    origin = repo.get_meta("git_origin") or repo.backend_url()
+    if not origin:
+        return 0
+    if verbose:
+        print(f"origin\t{origin} (fetch)")
+        print(f"origin\t{origin} (push)")
+    else:
+        print("origin")
+    return 0
 
 
 def _push(repo: Repository, args: list[str]) -> int:
@@ -371,7 +422,7 @@ def _push(repo: Repository, args: list[str]) -> int:
 
 def _working_tree_git(repo: Repository, argv: list[str]) -> int:
     GitCache(repo).rebuild(force=True)
-    result = subprocess.run([system_git(), *argv], cwd=repo.root)
+    result = subprocess.run([system_git(), *argv], cwd=repo.root, env=_system_git_env())
     if result.returncode == 0:
         _import_git_state(repo)
         GitCache(repo).rebuild(force=True)
@@ -400,8 +451,12 @@ def _subprocess_env() -> dict[str, str]:
 
 
 def _passthrough(argv: list[str]) -> int:
-    result = subprocess.run([system_git(), *argv])
+    result = subprocess.run([system_git(), *argv], env=_system_git_env())
     return result.returncode
+
+
+def _system_git_env() -> dict[str, str]:
+    return {**os.environ, "TRUNKS_BYPASS": "1"}
 
 
 def _import_git_state(repo: Repository) -> None:
@@ -426,7 +481,13 @@ def _import_git_state(repo: Repository) -> None:
 
 
 def _read_head(repo: Repository) -> ObjectId | None:
-    result = subprocess.run([system_git(), "rev-parse", "HEAD"], cwd=repo.root, text=True, capture_output=True)
+    result = subprocess.run(
+        [system_git(), "rev-parse", "HEAD"],
+        cwd=repo.root,
+        text=True,
+        capture_output=True,
+        env=_system_git_env(),
+    )
     if result.returncode != 0:
         return None
     raw = result.stdout.strip()

@@ -59,6 +59,8 @@ async def dispatch(argv: list[str]) -> int:
     init_p.add_argument("--backend", default=None)
     init_p.add_argument("--name", default=None)
 
+    sub.add_parser("shell", help="open a shell with Trunks Git interop enabled")
+
     mount_p = sub.add_parser("mount", help="create or open a Trunks repo at a path")
     mount_p.add_argument("--repo", required=True, help="logical repo name, for example my-app or acme/my-app")
     mount_p.add_argument("--path", default=None, help="local mount path")
@@ -218,6 +220,8 @@ async def dispatch(argv: list[str]) -> int:
     try:
         if args.command == "init":
             return init(args.name, args.backend)
+        if args.command == "shell":
+            return shell(args.backend)
         if args.command == "mount":
             return await mount(
                 args.repo,
@@ -986,7 +990,6 @@ async def mount(
         "mount",
         {"path": str(target), "created": created, "watch": watch, "pulled": pulled},
     )
-    _auto_install_shim()
     return 0
 
 
@@ -1353,28 +1356,7 @@ def init(name: str | None, backend: str | None) -> int:
     print(f"Remote      {repo.backend_url() or 'none (local-only)'}")
     if mirrors:
         print(f"Mirrors     {', '.join(mirrors)}")
-    _auto_install_shim()
     return 0
-
-
-def _auto_install_shim() -> None:
-    target_dir = Path.home() / ".local" / "bin"
-    target = target_dir / "git"
-    script = _shim_script()
-    if target.exists() and target.read_text(encoding="utf-8") == script:
-        return
-    target_dir.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        backup = target.with_suffix(".bak")
-        target.rename(backup)
-    target.write_text(script, encoding="utf-8")
-    target.chmod(0o755)
-    _write_shim_marker()
-    print()
-    print(f"Git shim installed -> {target}")
-    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
-    if str(target_dir) not in path_dirs:
-        print(f'Add to PATH:  export PATH="{target_dir}:$PATH"')
 
 
 def config(action: str, key: str, value: str | None) -> int:
@@ -1522,7 +1504,7 @@ async def run_trunk(command: str) -> int:
             if result is None:
                 print("Nothing to push (no remote configured)")
             elif result.refs_pushed == 0 and result.refs_already_current == 0:
-                print("Nothing to push (no refs in local trunk — did you commit through the trunks gitshim?)")
+                print("Nothing to push (no refs in local trunk; commit with `trunks shell` or `trunks checkpoint` first)")
             else:
                 print(f"Pushed {result.refs_pushed} ref(s), {result.objects_uploaded} object(s); {result.refs_already_current} already current")
         elif command == "pull":
@@ -2368,7 +2350,7 @@ def shell(backend: str | None) -> int:
         print(GIT_NOT_FOUND_MESSAGE, file=sys.stderr)
         return 1
     repo = _repo_or_init(backend=backend)
-    GitCache(repo).rebuild()
+    GitCache(repo).rebuild(force=True)
     from .version import __version__
     print(f"Welcome to Trunks {__version__}")
     print()
