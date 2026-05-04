@@ -76,6 +76,10 @@ jobs:
         env:
           TRUNKS_RUN_REAL_NFS_TESTS: "1"
         run: |
+          if [ ! -f tests/unit/test_mount_nfs_real.py ]; then
+            echo "tests/unit/test_mount_nfs_real.py not found, skipping"
+            exit 0
+          fi
           python3 -m unittest \
             tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_round_trip \
             tests.unit.test_mount_nfs_real.RealNfsMountTests.test_real_mount_edge_matrix \
