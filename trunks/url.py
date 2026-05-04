@@ -148,8 +148,19 @@ def backend_from_url(value: str | "Backend" | None) -> "Backend | None":
 
 def backend_from_storage(storage: "Storage", repo_name: str) -> "Backend | None":
     from .backend import Role
+    from .config import get_storage_profile
     from .credentials import S3Credentials
+    from .storage import Storage
 
+    global_profile = get_storage_profile(storage.name)
+    if global_profile is not None:
+        storage = Storage(
+            name=storage.name,
+            backend=storage.backend,
+            role=storage.role,
+            settings={**global_profile.settings, **storage.settings},
+            credentials={**global_profile.credentials, **storage.credentials},
+        )
     profile = storage.with_env_overrides()
     role = Role.mirror if profile.role == "mirror" else Role.primary
     url = profile.url(repo_name)

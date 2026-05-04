@@ -24,7 +24,7 @@ def free_port() -> int:
 @contextmanager
 def fake_gcs_server():
     if subprocess.run(["docker", "--version"], capture_output=True).returncode != 0:
-        raise unittest.SkipTest("docker is not available")
+        raise RuntimeError("docker is required to run fake-gcs backend tests")
     name = f"trunks-gcs-{os.getpid()}-{int(time.time())}"
     port = free_port()
     run = subprocess.run(
@@ -51,7 +51,7 @@ def fake_gcs_server():
         text=True,
     )
     if run.returncode != 0:
-        raise unittest.SkipTest(f"could not start fake-gcs-server: {run.stderr.strip()}")
+        raise RuntimeError(f"could not start fake-gcs-server: {run.stderr.strip()}")
     try:
         time.sleep(1)
         yield f"http://127.0.0.1:{port}"
@@ -61,8 +61,6 @@ def fake_gcs_server():
 
 class GCSFakeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        if os.environ.get("TRUNKS_DOCKER_TESTS") != "1":
-            raise unittest.SkipTest("set TRUNKS_DOCKER_TESTS=1 to run Docker backend tests")
         asyncio.get_running_loop().slow_callback_duration = 60
 
     async def test_gcs_backend_contract_against_fake_gcs(self) -> None:

@@ -70,7 +70,7 @@ class StatusWorktreeTests(unittest.IsolatedAsyncioTestCase):
                 (root / "node_modules" / "pkg.js").write_text("x\n", encoding="utf-8")
                 (root / "__pycache__").mkdir()
                 (root / "__pycache__" / "x.pyc").write_text("x\n", encoding="utf-8")
-                (root / ".git").mkdir()
+                (root / ".git").mkdir(exist_ok=True)
                 (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
                 # Tracked file so the run is meaningful
                 (root / "real.md").write_text("real\n", encoding="utf-8")

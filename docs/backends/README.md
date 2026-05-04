@@ -10,6 +10,8 @@ actual:  s3://company-trunks/trunks/my-app.trunk
 
 You configure the storage root once. Application code passes repo names, not URLs.
 
+Storage credentials live in `~/.trunks/config`. A repo stores the storage name and non-secret locator fields it needs to resolve its own path.
+
 ## Supported Backends
 
 | Backend | Storage root | Guide |

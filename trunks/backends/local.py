@@ -97,6 +97,16 @@ class Local(Backend):
     async def cas_ref(self, name: str, expected: ObjectId | None, new: ObjectId) -> bool:
         return await asyncio.to_thread(self._cas_ref_sync, name, expected, new)
 
+    async def delete_ref(self, name: str) -> None:
+        path = self._ref_path(name)
+        if path.exists():
+            await asyncio.to_thread(path.unlink)
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        path = self._object_path(oid)
+        if path.exists():
+            await asyncio.to_thread(path.unlink)
+
     async def list_refs(self, prefix: str = "") -> AsyncIterator[Ref]:
         refs_root = self.root / "refs"
         if not refs_root.exists():

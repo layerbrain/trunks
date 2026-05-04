@@ -86,6 +86,12 @@ class SFTP(Backend):
         finally:
             await self._remove(lock)
 
+    async def delete_ref(self, name: str) -> None:
+        await self._remove(self._path(normalize_ref(name)))
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        await self._remove(self._object_path(oid))
+
     async def list_refs(self, prefix: str = ""):
         sftp = await self._client()
         refs_root = self._path("refs")

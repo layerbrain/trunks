@@ -1,0 +1,22 @@
+name: live-demo
+on: [push, workflow_dispatch]
+
+jobs:
+  hello-trunks-ci:
+    runs-on: ubuntu-latest
+    env:
+      PORT: "8080"
+      DURATION_S: "60"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: boot app + preview + smoke
+        run: bash scripts/run-preview.sh
+
+      - name: upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: latency-report
+          path: |
+            report.json
+            logs/app.log

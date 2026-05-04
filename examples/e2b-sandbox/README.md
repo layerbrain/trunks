@@ -20,8 +20,9 @@ trunks pull
 
 ```bash
 trunks diff --vs main
-trunks checkpoint -m "agent output"
-trunks push
+git add .
+git commit -m "agent output"
+git push
 ```
 
 Another sandbox or developer machine can mount the same repo and pull the checkpoint.

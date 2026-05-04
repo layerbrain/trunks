@@ -11,7 +11,10 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from trunks.cli import dispatch
+from trunks.cli import dispatch, shim
+from trunks.actions.artifacts import get_artifact
+from trunks.actions.storage import load_run
+from trunks.actions.workflow import list_workflow_runs
 from trunks.gitshim import main as git_main
 from trunks.repository import Repository
 
@@ -59,6 +62,91 @@ class CliGitShimTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(git_main(["commit", "-m", "init"]), 0)
                     self.assertEqual(git_main(["push"]), 0)
                 self.assertTrue((remote_root / "refs" / "heads" / "main").exists())
+
+    async def test_git_push_triggers_trunks_workflow_push_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as remote:
+            root = Path(tmp)
+            remote_root = Path(remote) / "repo.trunk"
+            with cwd(root):
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(await dispatch(["init", "--backend", f"local://{remote_root}"]), 0)
+                    workflows = root / ".trunks" / "workflows"
+                    workflows.mkdir(parents=True)
+                    (workflows / "ci.yml").write_text(
+                        """
+name: CI
+on: [push]
+jobs:
+  test:
+    steps:
+      - run: printf git-push-triggered
+""".strip(),
+                        encoding="utf-8",
+                    )
+                    self.assertEqual(git_main(["add", "."]), 0)
+                    self.assertEqual(git_main(["commit", "-m", "add ci"]), 0)
+                    self.assertEqual(git_main(["push"]), 0)
+
+                repo = Repository.find(root)
+                workflow_runs = list_workflow_runs(repo)
+                self.assertEqual(len(workflow_runs), 1)
+                self.assertEqual(workflow_runs[0]["phase"], "succeeded")
+                self.assertEqual(workflow_runs[0]["workflow"]["name"], "CI")
+
+    async def test_installed_git_command_push_triggers_trunks_workflow_push_actions(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            tempfile.TemporaryDirectory() as remote,
+            tempfile.TemporaryDirectory() as shim_dir,
+            tempfile.TemporaryDirectory() as fake_home,
+        ):
+            root = Path(tmp)
+            remote_root = Path(remote) / "repo.trunk"
+            with patch.dict(os.environ, {"HOME": fake_home, "XDG_CONFIG_HOME": str(Path(fake_home) / ".config")}, clear=False):
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(shim("install", shim_dir), 0)
+            Repository.init(cwd=root, name="repo", backend=f"local://{remote_root}")
+            workflows = root / ".trunks" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "ci.yml").write_text(
+                """
+name: CI
+on: [push]
+jobs:
+  test:
+    trunks:
+      spec:
+        cpu: 1
+        memory: 1
+        disk: 1
+    steps:
+      - run: printf installed-git-triggered > provider-marker.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          path: provider-marker.txt
+""".strip(),
+                encoding="utf-8",
+            )
+            env = {
+                **os.environ,
+                "HOME": fake_home,
+                "XDG_CONFIG_HOME": str(Path(fake_home) / ".config"),
+                "PATH": f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+            }
+            for args in (["git", "add", "."], ["git", "commit", "-m", "add ci"], ["git", "push"]):
+                result = subprocess.run(args, cwd=root, env=env, text=True, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, 0, msg=f"{args}: {result.stderr}\n{result.stdout}")
+
+            repo = Repository.find(root)
+            workflow_runs = list_workflow_runs(repo)
+            self.assertEqual(len(workflow_runs), 1)
+            self.assertEqual(workflow_runs[0]["phase"], "succeeded")
+            self.assertEqual(workflow_runs[0]["workflow"]["name"], "CI")
+            run_id = workflow_runs[0]["jobs"][0]["run"]
+            job_run = load_run(repo, run_id)
+            self.assertEqual(job_run["state"]["provider"], "local")
+            self.assertEqual(job_run["result"]["exit_code"], 0)
+            self.assertEqual(get_artifact(repo, run_id, "provider-marker.txt"), b"installed-git-triggered")
 
     async def test_git_branch_verbose_does_not_create_dash_vv_branch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -20,7 +20,7 @@ AZURITE_KEY = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1
 @contextmanager
 def azurite_server():
     if subprocess.run(["docker", "--version"], capture_output=True).returncode != 0:
-        raise unittest.SkipTest("docker is not available")
+        raise RuntimeError("docker is required to run Azurite backend tests")
     name = f"trunks-azurite-{os.getpid()}-{int(time.time())}"
     run = subprocess.run(
         [
@@ -42,7 +42,7 @@ def azurite_server():
         text=True,
     )
     if run.returncode != 0:
-        raise unittest.SkipTest(f"could not start Azurite: {run.stderr.strip()}")
+        raise RuntimeError(f"could not start Azurite: {run.stderr.strip()}")
     try:
         port = ""
         for _ in range(80):
@@ -67,8 +67,6 @@ def azurite_server():
 
 class AzureAzuriteTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        if os.environ.get("TRUNKS_DOCKER_TESTS") != "1":
-            raise unittest.SkipTest("set TRUNKS_DOCKER_TESTS=1 to run Docker backend tests")
         asyncio.get_running_loop().slow_callback_duration = 60
 
     async def test_azure_backend_contract_against_azurite(self) -> None:

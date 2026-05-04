@@ -81,6 +81,41 @@ trunks cache verify
 trunks cache clear
 ```
 
+## Actions And Sandboxes
+
+```bash
+trunks actions run --command "python3.12 -m unittest" --json
+trunks actions enqueue --command "python3.12 -m unittest" --timeout 1800 --artifact reports --json
+trunks actions execute --id executor-1 --json
+trunks actions list --status succeeded --json
+trunks actions describe --id <run-id> --json
+trunks actions status --id <run-id> --json
+trunks actions logs --id <run-id>
+trunks actions watch --id <run-id>
+trunks actions cancel --id <run-id> --json
+trunks actions artifacts --id <run-id> --json
+trunks actions secrets bind NPM_TOKEN env:NPM_TOKEN
+trunks actions capacity --json
+trunks actions health --json
+trunks actions oidc token --id <run-id> --audience aws --json
+trunks actions prune --older-than 30d --keep-last 100 --dry-run --json
+trunks actions workflows lint --json
+trunks actions workflow-runs --json
+
+trunks sandboxes providers --json
+trunks sandboxes providers show --name local --json
+trunks sandboxes providers test --name local
+trunks sandboxes providers orphans --name daytona --json
+trunks sandboxes providers cleanup --name daytona --dry-run --json
+trunks sandboxes providers orphans --name digitalocean --json
+trunks sandboxes providers cleanup --name digitalocean --dry-run --json
+trunks sandboxes providers scaffold --name acme-fast -o ./providers
+trunks sandboxes specs --provider local
+trunks sandboxes regions --provider local
+```
+
+Actions state is stored in Trunks refs and objects. Sandbox providers are async runtimes that execute jobs for Actions.
+
 ## Webhooks And Audit
 
 ```bash

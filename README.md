@@ -28,7 +28,7 @@ npm install @layerbrain/trunks
 trunks mount --repo my-app --backend s3://company-trunks --path ./my-app
 ```
 
-That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. `trunks push` syncs to your bucket. Another machine runs the same `mount` and sees the same files.
+That's it. `./my-app` is a normal folder now. Run code in it. Edit files in it. `git push` through the Trunks shim syncs to your bucket. Another machine runs the same `mount` and sees the same files.
 
 S3 here is whatever you have: GCS, Azure Blob, R2, Tigris, MinIO, Postgres, SFTP, fileshare, local disk. Trunks makes each one act like a Git remote. No Trunks server in the middle. No Git server in the middle.
 
@@ -53,7 +53,7 @@ That's the whole protocol. Two writers can't clobber each other. Crashes don't c
 
 Modern software moves a lot of files across laptops, CI, sandboxes, servers, and storage buckets. Without version history, every write is just another blob that can overwrite the last one.
 
-Git solves history. But Git expects a hosted server, a clone per worker, and has no native story for large or many repos.
+Git solves history. But Git expects a hosted server, a clone per agent, and has no native story for large or many repos.
 
 Trunks keeps Git's commit objects and refs, drops the server, and writes straight to storage you already use. The bucket is the remote. So is the database, or the SFTP host. Work happens on branches, files are saved as commits, and diffs stay reviewable like any normal Git workflow.
 
@@ -83,8 +83,9 @@ One branch per task. Creating one is a single ref write. No copy.
 ```bash
 trunks branch create --name feature/auth --from main
 trunks branch switch --name feature/auth
-trunks checkpoint -m "update auth"
-trunks push
+git add .
+git commit -m "update auth"
+git push
 ```
 
 Two writers on different branches don't collide. Two writers on the same branch race a compare-and-swap. One wins. The other retries.

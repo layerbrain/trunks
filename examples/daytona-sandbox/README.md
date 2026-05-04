@@ -2,6 +2,8 @@
 
 Mount Trunks inside a Daytona workspace when repo state must move across Daytona, local development, CI, and other sandboxes.
 
+Trunks also ships a Daytona sandbox provider for Actions. It is HTTP-backed, implemented as a Python provider class, and optional: connect it with `trunks sandboxes providers add daytona-main --type daytona --secret api_key=...`, then run `trunks sandboxes providers test daytona --live --json`. Live tests must leave no Daytona sandboxes behind. The built-in provider uses Daytona's default snapshot sandbox and does not expose arbitrary resource sizing as first-party support.
+
 ## Bootstrap
 
 ```bash
@@ -20,6 +22,7 @@ trunks pull
 
 ```bash
 trunks diff --vs main
-trunks checkpoint -m "agent output"
-trunks push
+git add .
+git commit -m "agent output"
+git push
 ```

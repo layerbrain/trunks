@@ -106,6 +106,12 @@ class Azure(Backend):
         finally:
             await self._delete(lock_key)
 
+    async def delete_ref(self, name: str) -> None:
+        await self._delete(self._key(normalize_ref(name)))
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        await self._delete(self._object_key(oid))
+
     async def list_refs(self, prefix: str = ""):
         client = await self._container()
         ref_prefix = self._key(normalize_ref(prefix) if prefix else "refs/")

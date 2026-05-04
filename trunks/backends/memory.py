@@ -44,6 +44,12 @@ class Memory(Backend):
         self.refs[normalized] = new
         return True
 
+    async def delete_ref(self, name: str) -> None:
+        self.refs.pop(normalize_ref(name), None)
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        self.objects.pop(oid, None)
+
     async def list_refs(self, prefix: str = "") -> AsyncIterator[Ref]:
         normalized_prefix = normalize_ref(prefix) if prefix else ""
         for name, oid in sorted(self.refs.items()):

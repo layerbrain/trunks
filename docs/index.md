@@ -12,9 +12,11 @@ npm install @layerbrain/trunks
 
 trunks repo create --name my-app --backend s3://company-trunks
 trunks mount --repo my-app --path ./my-app
-echo "Fix auth" > my-app/task.md
-trunks checkpoint -m "update auth"
-trunks push
+cd ./my-app
+echo "Fix auth" > task.md
+git add .
+git commit -m "update auth"
+git push
 ```
 
 [Get started](tutorial.md){ .md-button .md-button--primary }
@@ -55,6 +57,7 @@ trunks push
 | Every command | [CLI reference](cli.md) |
 | Python | [Python SDK](sdk-python.md) |
 | Node | [Node SDK](sdk-node.md) |
+| Actions and sandbox providers | [Actions](actions.md) |
 | Resource shapes | [Resources](resources.md) |
 | Storage setup | [Backends](backends/README.md) |
 | Agent framework recipes | [Agents](agents.md) |

@@ -94,6 +94,12 @@ class GCS(Backend):
         finally:
             await asyncio.to_thread(self._delete, lock_key)
 
+    async def delete_ref(self, name: str) -> None:
+        await asyncio.to_thread(self._delete, self._key(normalize_ref(name)))
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        await asyncio.to_thread(self._delete, self._object_key(oid))
+
     async def list_refs(self, prefix: str = ""):
         ref_prefix = self._key(normalize_ref(prefix) if prefix else "refs/")
         keys = await asyncio.to_thread(self._list_keys, ref_prefix)

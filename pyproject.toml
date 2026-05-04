@@ -25,6 +25,7 @@ classifiers = [
 # back" branch — installation alone determines availability.
 dependencies = [
     "orjson>=3.10",
+    "PyYAML>=6.0",
     "uvloop>=0.19; sys_platform != 'win32'",
 ]
 
@@ -35,7 +36,7 @@ Issues = "https://github.com/layerbrain/trunks/issues"
 
 [project.optional-dependencies]
 s3 = ["httpx"]
-azure = ["azure-storage-blob"]
+azure = ["azure-storage-blob", "aiohttp"]
 gcs = ["google-cloud-storage"]
 sftp = ["asyncssh"]
 postgres = ["asyncpg"]

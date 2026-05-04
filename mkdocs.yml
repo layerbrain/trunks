@@ -43,6 +43,15 @@ nav:
   - Python SDK: sdk-python.md
   - Node SDK: sdk-node.md
   - Agents: agents.md
+  - Actions:
+      - Overview: actions.md
+      - Examples: actions/examples.md
+      - App Integration: actions/app-integration.md
+      - Migration Bridges: actions/migration-bridges.md
+      - Testing Matrix: actions/testing-matrix.md
+  - Sandboxes:
+      - Providers: sandboxes/providers.md
+      - Bring Your Own Provider: sandboxes/bring-your-own-provider.md
   - Backends:
       - Overview: backends/README.md
       - S3-compatible: backends/s3.md

@@ -17,11 +17,14 @@ from .config import (
     GlobalConfig,
     backend_from_env,
     env_forces_local_only,
+    get_storage_profile as get_global_storage_profile,
     mirror_backends_from_env,
     mirror_policy_from_env,
     push_mode_from_env,
     repo_name_from_env,
     resolve_backend_url,
+    remove_storage_profile as remove_global_storage_profile,
+    set_storage_profile as set_global_storage_profile,
 )
 from . import audit
 from .cache import CacheManager
@@ -160,6 +163,12 @@ async def dispatch(argv: list[str]) -> int:
     history_p = sub.add_parser("history", help="show refs and commit graph")
     history_p.add_argument("--json", action="store_true")
 
+    actions_p = sub.add_parser("actions", help="run Trunks Actions workflows and jobs")
+    actions_p.add_argument("module_args", nargs=argparse.REMAINDER)
+
+    sandboxes_p = sub.add_parser("sandboxes", help="inspect sandbox providers")
+    sandboxes_p.add_argument("module_args", nargs=argparse.REMAINDER)
+
     diff_p = sub.add_parser("diff", help="show file changes between refs or the worktree")
     diff_p.add_argument("--from", dest="from_ref", default=None)
     diff_p.add_argument("--vs", default=None)
@@ -266,6 +275,14 @@ async def dispatch(argv: list[str]) -> int:
             return await log(json_output=args.json)
         if args.command == "history":
             return history(json_output=args.json)
+        if args.command == "actions":
+            from .actions.cli import dispatch as actions_dispatch
+
+            return await actions_dispatch(args.module_args)
+        if args.command == "sandboxes":
+            from .sandboxes.cli import dispatch as sandboxes_dispatch
+
+            return await sandboxes_dispatch(args.module_args)
         if args.command == "diff":
             return cmd_diff(from_ref=args.from_ref, vs=args.vs, json_output=args.json)
         if args.command == "add":
@@ -966,7 +983,7 @@ async def mount(
         "mount",
         {"path": str(target), "created": created, "watch": watch, "pulled": pulled},
     )
-    _print_shim_hint(repo)
+    _auto_install_shim()
     return 0
 
 
@@ -1334,15 +1351,28 @@ def init(name: str | None, backend: str | None) -> int:
     print(f"Remote      {repo.backend_url() or 'none (local-only)'}")
     if mirrors:
         print(f"Mirrors     {', '.join(mirrors)}")
-    _print_shim_hint(repo)
+    _auto_install_shim()
     return 0
 
 
-def _print_shim_hint(repo: Repository) -> None:
-    if not (repo.root / ".git").exists():
+def _auto_install_shim() -> None:
+    target_dir = Path.home() / ".local" / "bin"
+    target = target_dir / "git"
+    script = _shim_script()
+    if target.exists() and target.read_text(encoding="utf-8") == script:
         return
+    target_dir.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        backup = target.with_suffix(".bak")
+        target.rename(backup)
+    target.write_text(script, encoding="utf-8")
+    target.chmod(0o755)
+    _write_shim_marker()
     print()
-    print("Tip: run `trunks` to open a managed shell where `git push` syncs through Trunks.")
+    print(f"Git shim installed -> {target}")
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    if str(target_dir) not in path_dirs:
+        print(f'Add to PATH:  export PATH="{target_dir}:$PATH"')
 
 
 def config(action: str, key: str, value: str | None) -> int:
@@ -1756,6 +1786,7 @@ async def storage(
         if not repo.remove_storage(name):
             print(f"storage remove failed: unknown storage target {name}", file=sys.stderr)
             return 1
+        remove_global_storage_profile(name)
         if json_output:
             print(json.dumps({"object": "storage_target", "id": name, "name": name, "deleted": True}, sort_keys=True))
             return 0
@@ -1799,12 +1830,8 @@ async def storage(
         except Exception as exc:
             print(f"storage add failed: {exc}", file=sys.stderr)
             return 1
-    if mirror:
-        repo.set_storage_profile(profile)
-        await _publish_storage_config(repo)
-    else:
-        repo.set_storage_profile(profile)
-        await _publish_storage_config(repo)
+    _persist_storage_profile(repo, profile)
+    await _publish_storage_config(repo)
     if json_output:
         print(json.dumps(_storage_record(profile.public_record(repo.name)), sort_keys=True))
         return 0
@@ -1879,7 +1906,7 @@ async def storage_from_args(args: argparse.Namespace) -> int:
             print(f"storage add failed: {exc}", file=sys.stderr)
             return 1
 
-    repo.set_storage_profile(profile)
+    _persist_storage_profile(repo, profile)
     await _publish_storage_config(repo)
     if getattr(args, "json", False):
         print(json.dumps(_storage_record(profile.public_record(repo.name)), sort_keys=True))
@@ -1961,7 +1988,7 @@ def _wizard_storage_values(backend: str, repo_name: str) -> dict[str, str | None
         values["prefix"] = _prompt("Prefix", default="trunks/{repo}.trunk").replace("{repo}", repo_name)
         values["region"] = _prompt("Region", default="").strip() or None
         values["endpoint"] = _prompt("Endpoint URL", default="").strip() or None
-        if _prompt_yes_no("Store access key in this repo config?", default=False):
+        if _prompt_yes_no("Store access key in local Trunks config?", default=False):
             values["access_key"] = _prompt("Access key", required=True)
             values["secret_key"] = _prompt("Secret key", required=True, secret=True)
         else:
@@ -1977,7 +2004,7 @@ def _wizard_storage_values(backend: str, repo_name: str) -> dict[str, str | None
         values["account_name"] = _prompt("Account name", required=True)
         values["container"] = _prompt("Container", required=True)
         values["prefix"] = _prompt("Prefix", default="trunks/{repo}.trunk").replace("{repo}", repo_name)
-        if _prompt_yes_no("Store account key or SAS token in this repo config?", default=False):
+        if _prompt_yes_no("Store account key or SAS token in local Trunks config?", default=False):
             values["account_key"] = _prompt("Account key", default="", secret=True).strip() or None
             values["sas_token"] = _prompt("SAS token", default="", secret=True).strip() or None
         return values
@@ -2135,15 +2162,44 @@ def _storage_fields_from_args(args: argparse.Namespace) -> tuple[dict[str, str],
     return settings, credentials, validation_credentials
 
 
+def _persist_storage_profile(repo: Repository, profile: Storage) -> None:
+    set_global_storage_profile(profile)
+    repo.set_storage_profile(_repo_storage_profile(profile))
+
+
+def _repo_storage_profile(profile: Storage) -> Storage:
+    return Storage(
+        name=profile.name,
+        backend=profile.backend,
+        role=profile.role,
+        settings=dict(profile.settings),
+        credentials={},
+    )
+
+
+def _effective_storage_profile(profile: Storage) -> Storage:
+    global_profile = get_global_storage_profile(profile.name)
+    if global_profile is None:
+        return profile
+    return Storage(
+        name=profile.name,
+        backend=profile.backend,
+        role=profile.role,
+        settings={**global_profile.settings, **profile.settings},
+        credentials={**global_profile.credentials, **profile.credentials},
+    )
+
+
 def storage_show(repo: Repository, name: str, *, json_output: bool = False) -> int:
     profile = repo.storage_profile(name)
     if profile is None:
         print(f"storage show failed: unknown storage target {name}", file=sys.stderr)
         return 1
+    effective = _effective_storage_profile(profile)
     if json_output:
         print(json.dumps(_storage_record(profile.public_record(repo.name)), sort_keys=True))
         return 0
-    record = profile.masked_record()
+    record = effective.masked_record()
     print(f"name        {record['name']}")
     print(f"role        {record['role']}")
     print(f"backend     {record['backend']}")

@@ -52,10 +52,10 @@ Checkpoint is local. Nothing has gone over the network yet.
 ## 4. Push
 
 ```bash
-trunks push
+git push
 ```
 
-Push uploads missing objects and advances the backend ref with compare-and-swap.
+When the Trunks git shim handles `git push`, it uploads missing objects and advances the backend ref with compare-and-swap.
 
 ```text
 local objects → backend objects   (one PUT per missing blob/tree/commit)
@@ -63,6 +63,19 @@ local ref     → backend ref       (one CAS, atomic)
 ```
 
 If another writer moved the same branch first, the CAS fails and your push errors out cleanly. Pull, rebase or merge, push again.
+
+## Multi-Host Safety
+
+Trunks never advances a backend branch by blind overwrite. Every backend implements the same ref CAS contract:
+
+- many writers racing one ref produce one winner
+- writers updating different refs can all succeed
+- objects are content-addressed and verified before storage accepts them
+- mirror failures in strict mode do not advance the primary ref
+
+The contract runs against memory, local disk, fileshare, SQLite, S3-compatible storage, Postgres, GCS, Azure Blob, and SFTP. Object-store and SFTP backends use lock objects for the short ref-update section; SQL backends use database transactions or advisory transaction locks.
+
+Actions run refs are a separate namespace in the same storage. A `git push` starts matching `.trunks/workflows/*` files with `on: push`; queued runs, leases, logs, artifacts, capacity, and indexes are CAS-fenced under `refs/actions/repos/<repo>/...`.
 
 ## 5. Pull
 
@@ -86,13 +99,13 @@ refs/heads/main      → commit-A
 refs/heads/feature/auth → commit-A   (same commit, different name)
 ```
 
-The worker commits, push moves only `refs/heads/feature/auth`. `main` doesn't budge.
+The agent commits, push moves only `refs/heads/feature/auth`. `main` doesn't budge.
 
 ## What Goes Wrong, And What To Do
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `push` errors with a CAS failure | Another writer pushed first | `trunks pull`, resolve, `trunks push` |
+| `push` errors with a CAS failure | Another writer pushed first | `git pull`, resolve, `git push` |
 | `mount` errors that the repo doesn't exist | No `repo create` for that name | `trunks repo create --name <name> --backend <url>` |
 | Files missing after `pull` | Stale ref cache | `trunks fetch && trunks pull` |
 | Pushed bytes but the other machine sees nothing | Different storage root in config | Check `trunks repo get --name <name> --json` |

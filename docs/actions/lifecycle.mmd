@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    actor Producer as Producer<br/>(CLI / SDK / agent)
+    participant Storage as Trunks Storage<br/>(shared Backend)
+    participant Executor as Executor<br/>(daemon or execute)
+    participant Sandbox as Sandbox<br/>(local / Docker / Daytona)
+
+    Producer->>Storage: write commit closure<br/>objects + branch refs
+    Producer->>Storage: CAS queue ref<br/>refs/actions/repos/<repo>/queue/<spec-key>/<route-bucket>/<shard>/<run>
+    Producer-->>Producer: return run handle
+
+    Executor->>Storage: scan assigned queue shards
+    Executor->>Storage: CAS claim capacity slot<br/>refs/actions/pools/<pool>/capacity/<region>/<spec-key>/slots/<n>
+    Executor->>Storage: CAS claim run state<br/>pending -> running
+    Executor->>Sandbox: create sandbox from Spec
+    Executor->>Sandbox: hydrate commit
+    Sandbox->>Storage: read commit objects<br/>(token scoped when enabled)
+    Executor->>Sandbox: run command
+
+    loop while running
+        Sandbox-->>Executor: log chunk
+        Executor->>Storage: write log ref<br/>runs/<run>/logs/<attempt>/<seq>
+        Executor->>Storage: heartbeat run lease + capacity slot
+    end
+
+    Executor->>Sandbox: collect artifacts
+    Executor->>Storage: write artifact blobs + artifact refs
+    Executor->>Storage: CAS complete run state
+    Executor->>Storage: release capacity slot + queue ref
+    Executor->>Sandbox: destroy sandbox
+
+    Producer->>Storage: read logs/state/artifacts
+    Storage-->>Producer: replayable result

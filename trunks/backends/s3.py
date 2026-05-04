@@ -131,6 +131,12 @@ class S3(Backend):
         finally:
             await self._request("DELETE", lock_key, None, {})
 
+    async def delete_ref(self, name: str) -> None:
+        await self._request("DELETE", self._key(normalize_ref(name)), None, {})
+
+    async def delete_object(self, oid: ObjectId) -> None:
+        await self._request("DELETE", self._object_key(oid), None, {})
+
     async def list_refs(self, prefix: str = ""):
         ref_prefix = self._key(normalize_ref(prefix) if prefix else "refs/")
         keys = await self._list_keys(ref_prefix)

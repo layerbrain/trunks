@@ -9,7 +9,11 @@ from .errors import RepositoryNotFound, TrunksError
 from .ids import ObjectId
 from .repository import Repository
 from .storage import Storage
-from .config import resolve_backend_url
+from .config import (
+    remove_storage_profile as remove_global_storage_profile,
+    resolve_backend_url,
+    set_storage_profile as set_global_storage_profile,
+)
 from . import audit, webhooks
 
 ListResponse = dict[str, Any]
@@ -370,7 +374,14 @@ class StorageResource:
         if resolved is None:
             raise TrunksError(f"invalid storage URL: {url}")
         profile = Storage.from_url(name=name, role="mirror" if mirror else "primary", url=resolved)
-        repo.set_storage_profile(profile)
+        set_global_storage_profile(profile)
+        repo.set_storage_profile(Storage(
+            name=profile.name,
+            backend=profile.backend,
+            role=profile.role,
+            settings=dict(profile.settings),
+            credentials={},
+        ))
         return _storage_record(profile.public_record(repo.name))
 
     def _get(self, *, name: str) -> Resource:
@@ -382,6 +393,7 @@ class StorageResource:
     def _delete(self, *, name: str) -> Resource:
         if not self._client._repo().remove_storage(name):
             raise TrunksError(f"unknown storage target: {name}")
+        remove_global_storage_profile(name)
         return {"object": "storage_target", "id": name, "name": name, "deleted": True}
 
     def _records(self) -> list[Resource]:

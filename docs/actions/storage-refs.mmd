@@ -1,0 +1,34 @@
+flowchart TB
+    subgraph Objects["Objects"]
+        OBJ["refs/objects/<oid><br/>commits, trees, blobs, artifacts"]
+    end
+
+    subgraph RepoActions["refs/actions/repos/<repo>"]
+        QUEUE["queue/<spec-key>/<route-bucket>/<shard>/<run><br/>pending work"]
+        STATE["runs/<run>/state<br/>phase, token, executor, result"]
+        LOGS["runs/<run>/logs/<attempt>/<seq><br/>stdout/stderr chunks"]
+        ART["runs/<run>/artifacts/<path><br/>artifact metadata -> object oid"]
+        RUNIDX["index/runs/by-repo/<run><br/>index/runs/by-status/<phase>/<run>"]
+        WSTATE["workflow-runs/<workflow-run>/state"]
+        WJOB["workflow-runs/<workflow-run>/jobs/<job>/<matrix-index>"]
+        WIDX["index/workflow-runs/by-repo/<workflow-run><br/>index/workflow-runs/by-status/<phase>/<workflow-run>"]
+        SECRETS["secrets/<name><br/>binding metadata only"]
+    end
+
+    subgraph Pools["refs/actions/pools/<pool>"]
+        SLOT["capacity/<region>/<spec-key>/slots/<n><br/>executor lease"]
+        LIMIT["capacity/<region>/<spec-key>/limit"]
+        HEALTH["providers/<provider>/<region>/health"]
+        MAINT["maintenance/lease"]
+    end
+
+    QUEUE --> STATE
+    STATE --> RUNIDX
+    STATE --> LOGS
+    STATE --> ART
+    ART --> OBJ
+    WSTATE --> WJOB
+    WSTATE --> WIDX
+    STATE -. consumes .-> SLOT
+    SLOT --> LIMIT
+    HEALTH -. informs routing .-> QUEUE
