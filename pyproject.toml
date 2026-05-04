@@ -27,6 +27,12 @@ dependencies = [
     "orjson>=3.10",
     "PyYAML>=6.0",
     "uvloop>=0.19; sys_platform != 'win32'",
+    "httpx",
+    "azure-storage-blob",
+    "aiohttp",
+    "google-cloud-storage",
+    "asyncssh",
+    "asyncpg",
 ]
 
 [project.urls]
@@ -35,11 +41,6 @@ Source = "https://github.com/layerbrain/trunks"
 Issues = "https://github.com/layerbrain/trunks/issues"
 
 [project.optional-dependencies]
-s3 = ["httpx"]
-azure = ["azure-storage-blob", "aiohttp"]
-gcs = ["google-cloud-storage"]
-sftp = ["asyncssh"]
-postgres = ["asyncpg"]
 testing = ["testcontainers"]
 
 [project.scripts]
