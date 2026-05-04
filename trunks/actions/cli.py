@@ -229,9 +229,20 @@ async def dispatch(argv: list[str]) -> int:
         if args.json:
             print(json.dumps(payload, sort_keys=True))
             return 0
-        for run in payload["data"]:
-            if isinstance(run, dict):
-                _print_run_summary(run)
+        runs = payload["data"]
+        if not runs:
+            print("No runs found.")
+        else:
+            print(f"{'ID':<40} {'STATUS':<12} {'PROVIDER':<16} {'EXIT'}")
+            for run in runs:
+                if isinstance(run, dict):
+                    state = run.get("state") if isinstance(run.get("state"), dict) else {}
+                    result = run.get("result") if isinstance(run.get("result"), dict) else {}
+                    rid = str(run.get("id", ""))[:38]
+                    phase = str(state.get("phase", "unknown"))
+                    provider = str(state.get("provider") or "-")[:14]
+                    exit_code = result.get("exit_code") if isinstance(result, dict) else "-"
+                    print(f"{rid:<40} {phase:<12} {provider:<16} {exit_code}")
         return 0
     if args.command == "cancel":
         payload = cancel_run(Repository.find(), args.id)
@@ -364,11 +375,39 @@ async def dispatch(argv: list[str]) -> int:
         if args.json:
             print(json.dumps(payload, sort_keys=True))
             return 0
-        print(json.dumps(payload, sort_keys=True))
+        if isinstance(payload, dict):
+            data = payload.get("data", [])
+            if isinstance(data, list) and data:
+                for entry in data:
+                    if isinstance(entry, dict):
+                        region = entry.get("region", "?")
+                        spec_key = entry.get("spec_key", "?")
+                        max_c = entry.get("max_concurrent", "?")
+                        current = entry.get("current", "?")
+                        print(f"{region:<16} {spec_key:<24} {current}/{max_c}")
+            elif args.action == "set":
+                print("capacity updated")
+            else:
+                print("No capacity limits configured.")
         return 0
     if args.command == "health":
         payload = provider_health_snapshot(Repository.find())
-        print(json.dumps(payload, sort_keys=True))
+        if args.json:
+            print(json.dumps(payload, sort_keys=True))
+            return 0
+        if isinstance(payload, dict):
+            data = payload.get("data", [])
+            if isinstance(data, list) and data:
+                print(f"{'PROVIDER':<20} {'REGION':<16} {'STATUS':<10} {'LAPSE RATE'}")
+                for entry in data:
+                    if isinstance(entry, dict):
+                        prov = str(entry.get("provider", "?"))[:18]
+                        region = str(entry.get("region", "?"))[:14]
+                        status = str(entry.get("status", "?"))
+                        lapse = entry.get("lapse_rate", "?")
+                        print(f"{prov:<20} {region:<16} {status:<10} {lapse}")
+            else:
+                print("No provider health data.")
         return 0
     if args.command == "oidc":
         try:
@@ -509,7 +548,48 @@ async def dispatch(argv: list[str]) -> int:
         if args.json:
             print(json.dumps(payload, sort_keys=True))
             return 0
-        print(json.dumps(payload, sort_keys=True))
+        obj = payload.get("object") if isinstance(payload, dict) else None
+        if obj == "workflow_run_list":
+            data = payload.get("data", [])
+            if not data:
+                print("No workflow runs found.")
+            else:
+                print(f"{'ID':<40} {'STATUS':<12} {'WORKFLOW':<20} {'JOBS'}")
+                for wr in data:
+                    if not isinstance(wr, dict):
+                        continue
+                    wid = str(wr.get("id", ""))[:38]
+                    status = str(wr.get("status", "unknown"))
+                    name = str(wr.get("workflow", {}).get("name", "") if isinstance(wr.get("workflow"), dict) else wr.get("name", ""))[:18]
+                    jobs = wr.get("jobs", [])
+                    job_count = len(jobs) if isinstance(jobs, list) else 0
+                    print(f"{wid:<40} {status:<12} {name:<20} {job_count}")
+        elif obj == "workflow_run_jobs":
+            data = payload.get("data", [])
+            if not data:
+                print("No jobs found.")
+            else:
+                for job in data:
+                    if not isinstance(job, dict):
+                        continue
+                    _print_run_summary(job)
+        elif obj == "workflow_run_graph":
+            data = payload.get("data", [])
+            if not data:
+                print("No dependency edges.")
+            else:
+                for edge in data:
+                    if isinstance(edge, dict):
+                        print(f"{edge.get('from', '?')} -> {edge.get('to', '?')}")
+        elif obj == "workflow_run_logs":
+            data = payload.get("data", [])
+            for chunk in data:
+                if isinstance(chunk, dict):
+                    print(chunk.get("text", ""), end="")
+                elif isinstance(chunk, str):
+                    print(chunk, end="")
+        else:
+            _print_workflow_run_summary(payload)
         return 0
     if args.command == "migrate":
         payload = migrate_workflow(
@@ -568,6 +648,20 @@ def _print_run_summary(run: dict[str, object]) -> None:
     region = state.get("region") if isinstance(state, dict) else None
     exit_code = result.get("exit_code") if isinstance(result, dict) else None
     print(f"{run.get('id')} {phase} provider={provider} region={region} exit={exit_code}")
+
+
+def _print_workflow_run_summary(wr: dict[str, object]) -> None:
+    wid = str(wr.get("id", ""))
+    status = str(wr.get("status", "unknown"))
+    workflow = wr.get("workflow")
+    name = str(workflow.get("name", "")) if isinstance(workflow, dict) else str(wr.get("name", ""))
+    jobs = wr.get("jobs", [])
+    job_count = len(jobs) if isinstance(jobs, list) else 0
+    print(f"{wid}  {status}  {name}  jobs={job_count}")
+    if isinstance(jobs, list):
+        for job in jobs:
+            if isinstance(job, dict):
+                _print_run_summary(job)
 
 
 def _spec_from_args(args: argparse.Namespace) -> Spec | None:
