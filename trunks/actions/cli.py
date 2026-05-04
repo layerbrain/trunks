@@ -531,7 +531,9 @@ def _public_secret_payload(payload: dict[str, object]) -> dict[str, object]:
 
 
 def _public_secret_binding(binding: dict[str, object]) -> dict[str, object]:
-    public = {key: value for key, value in binding.items() if key != "source"}
+    public: dict[str, object] = {}
+    if "name" in binding:
+        public["name"] = binding.get("name")
     source = binding.get("source")
     if isinstance(source, str) and ":" in source:
         public["source_type"] = source.split(":", 1)[0]
