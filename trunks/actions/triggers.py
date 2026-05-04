@@ -5,10 +5,10 @@ from pathlib import Path
 from trunks.repository import Repository
 
 from .workflow import (
+    enqueue_workflow,
     load_workflows,
     pull_request_trigger_matches,
     push_trigger_matches,
-    run_workflow,
 )
 
 
@@ -54,7 +54,7 @@ async def run_push_workflows(
             continue
         if not push_trigger_matches(filt, branch=branch, changed_files=changed_files, tag=tag):
             continue
-        runs.append(await run_workflow(repo, workflow=workflow.path, commit=commit, cwd=str(root)))
+        runs.append(enqueue_workflow(repo, workflow=workflow.path, commit=commit, cwd=str(root)))
     return runs
 
 
@@ -77,5 +77,5 @@ async def run_pull_request_workflows(
             continue
         if not pull_request_trigger_matches(filt, branch=branch, changed_files=changed_files, event_type=event_type):
             continue
-        runs.append(await run_workflow(repo, workflow=workflow.path, commit=commit, cwd=str(root)))
+        runs.append(enqueue_workflow(repo, workflow=workflow.path, commit=commit, cwd=str(root)))
     return runs
