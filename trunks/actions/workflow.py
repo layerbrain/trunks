@@ -381,6 +381,51 @@ def workflow_run_logs(repo: Repository, workflow_run: str) -> list[dict[str, obj
     return logs
 
 
+def refresh_workflow_runs_for_action_run(repo: Repository, run_payload: dict[str, object]) -> None:
+    run_id = run_payload.get("id")
+    state = run_payload.get("state")
+    if not isinstance(run_id, str) or not isinstance(state, dict):
+        return
+    phase = state.get("phase")
+    if not isinstance(phase, str):
+        return
+    for workflow_run in list_workflow_runs(repo, limit=1000):
+        jobs = workflow_run.get("jobs")
+        if not isinstance(jobs, list):
+            continue
+        changed = False
+        next_jobs: list[object] = []
+        for job in jobs:
+            if isinstance(job, dict) and job.get("run") == run_id:
+                job = {**job, "phase": phase}
+                changed = True
+            next_jobs.append(job)
+        if not changed:
+            continue
+        workflow_run["jobs"] = next_jobs
+        workflow_run["phase"] = _workflow_phase(next_jobs)
+        _persist_workflow_run(repo, workflow_run)
+
+
+def _workflow_phase(jobs: list[object]) -> str:
+    phases = [
+        job.get("phase")
+        for job in jobs
+        if isinstance(job, dict) and isinstance(job.get("phase"), str)
+    ]
+    if not phases:
+        return "pending"
+    if any(phase == "failed" for phase in phases):
+        return "failed"
+    if any(phase == "canceled" for phase in phases):
+        return "canceled"
+    if any(phase == "running" for phase in phases):
+        return "running"
+    if all(phase == "succeeded" for phase in phases):
+        return "succeeded"
+    return "pending"
+
+
 def _parse_job(job_id: str, raw: object, *, path: Path, accept_best_effort: bool) -> WorkflowJob:
     if not isinstance(raw, dict):
         raise WorkflowError(f"{path}: jobs.{job_id} must be a mapping")

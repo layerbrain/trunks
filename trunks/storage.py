@@ -134,7 +134,7 @@ class Storage:
         return self._format_repo(self.settings.get("prefix") or "trunks/{repo}.trunk", repo_name).strip("/")
 
     def _format_repo(self, value: str, repo_name: str) -> str:
-        return value.format(repo=repo_name) if "{repo}" in value else value
+        return value.replace("{repo}", repo_name)
 
     def _required(self, key: str) -> str:
         value = self.settings.get(key) or self.credentials.get(key)

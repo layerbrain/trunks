@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from trunks.cli import dispatch
+from trunks.repository import Repository
 
 
 def _real_git() -> str | None:
@@ -28,7 +29,7 @@ GIT = _real_git()
 def _write_global_config(home: Path, body: str) -> None:
     config = home / "config"
     config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text(body)
+    config.write_text(body.replace("{tmp}", str(home.parent)))
     config.chmod(0o600)
 
 
@@ -100,6 +101,9 @@ class MountAutoBootstrapTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(git_remote.stdout.strip(), "trunks://minio/myrepo")
             self.assertEqual(_git_config(target, "branch.main.remote"), "origin")
             self.assertEqual(_git_config(target, "branch.main.merge"), "refs/heads/main")
+            repo = Repository.find(target)
+            self.assertEqual(repo.primary_storage_name(), "minio")
+            self.assertEqual(repo.storage_url("minio"), f"sqlite:///{self._home_dir.parent}/storage.db#myrepo")
             self.assertTrue((target / ".git").exists())
 
     async def test_remount_is_idempotent(self) -> None:
@@ -221,6 +225,7 @@ class MountAutoBootstrapTests(unittest.IsolatedAsyncioTestCase):
                     rc = await dispatch(["mount", "--repo", "myrepo"])
                 self.assertEqual(rc, 0, msg=mount_out.getvalue())
                 self.assertIn("Origin      added -> trunks://primary/myrepo", mount_out.getvalue())
+                self.assertIn(f"Remote      local://{store}/trunks/myrepo.trunk", mount_out.getvalue())
 
                 subprocess.run([GIT, "-C", str(target), "config", "user.email", "test@example.com"], check=True)
                 subprocess.run([GIT, "-C", str(target), "config", "user.name", "Test"], check=True)
@@ -229,6 +234,10 @@ class MountAutoBootstrapTests(unittest.IsolatedAsyncioTestCase):
                 subprocess.run([GIT, "-C", str(target), "commit", "-m", "init", "-q"], check=True)
                 push = subprocess.run([GIT, "-C", str(target), "push"], capture_output=True, text=True)
                 self.assertEqual(push.returncode, 0, msg=f"stdout:\n{push.stdout}\nstderr:\n{push.stderr}")
+                ping_out = io.StringIO()
+                with redirect_stdout(ping_out):
+                    rc = await dispatch(["storage", "ping", "--name", "primary"])
+                self.assertEqual(rc, 0, msg=ping_out.getvalue())
             finally:
                 os.chdir(cwd)
 

@@ -996,6 +996,7 @@ async def mount(
     if not no_git:
         chosen_storage, storage_hint = _resolve_mount_storage(storage)
         if chosen_storage:
+            _bind_mount_storage(repo, chosen_storage)
             boot = _bootstrap_git_remote(target, repo_name, chosen_storage)
             git_status = boot["git"]
             remote_status = boot["remote"]
@@ -1060,6 +1061,17 @@ def _resolve_mount_storage(name: str | None) -> tuple[str | None, str | None]:
         )
     names = ", ".join(profile.name for profile in primaries)
     return None, f"multiple primary storages configured ({names}); pass --storage <name>"
+
+
+def _bind_mount_storage(repo: Repository, storage_name: str) -> None:
+    for profile in load_global_storage_profiles():
+        if profile.name != storage_name:
+            continue
+        current_primary = repo.primary_storage_name()
+        if current_primary != profile.name:
+            repo.remove_storage_profile(current_primary)
+        repo.set_storage_profile(_repo_storage_profile(profile))
+        return
 
 
 def _bootstrap_git_remote(target: Path, repo_name: str, storage_name: str) -> dict[str, str]:

@@ -419,6 +419,7 @@ class Helper:
             else:
                 return f"error {dst} non-fast-forward"
         await self._write_push_trigger(dst, new_oid)
+        await self._queue_local_push_workflows(dst, new_oid)
         return f"ok {dst}"
 
     async def _write_push_trigger(self, ref: str, oid: ObjectId) -> None:
@@ -443,6 +444,27 @@ class Helper:
         trigger_ref = f"refs/actions/repos/{self.repo_name}/triggers/push/{oid.value}"
         current = await self.backend.read_ref(trigger_ref)
         await self.backend.cas_ref(trigger_ref, current, blob.id)
+
+    async def _queue_local_push_workflows(self, ref: str, oid: ObjectId) -> None:
+        if ref.startswith("refs/heads/"):
+            branch = ref.removeprefix("refs/heads/")
+            tag = None
+        elif ref.startswith("refs/tags/"):
+            branch = None
+            tag = ref.removeprefix("refs/tags/")
+        else:
+            return
+        try:
+            from .actions.triggers import run_push_workflows
+            from .engine import _spawn_executor
+            from .repository import Repository
+
+            repo = Repository.find(Path.cwd())
+            workflow_runs = await run_push_workflows(repo, commit=oid.value, branch=branch, tag=tag)
+            if workflow_runs and os.environ.get("TRUNKS_ACTIONS_DISABLE_AUTO_EXECUTOR") != "1":
+                _spawn_executor(repo, workflow_runs)
+        except Exception as exc:
+            print(f"git-remote-trunks: warning: push workflow trigger skipped: {exc}", file=sys.stderr)
 
     def _git_rev_parse(self, ref: str) -> str:
         result = subprocess.run(

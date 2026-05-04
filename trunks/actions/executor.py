@@ -315,6 +315,10 @@ async def execute_once_async(
             )
             completed = load_run(repo, run)
             with contextlib.suppress(Exception):
+                from .workflow import refresh_workflow_runs_for_action_run
+
+                refresh_workflow_runs_for_action_run(repo, completed)
+            with contextlib.suppress(Exception):
                 await github_checks_writeback_from_env_async(completed)
             return completed
         finally:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import asyncio
 import shutil
 import sqlite3
 import subprocess
@@ -8,6 +9,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from trunks.actions.workflow import list_workflow_runs
+from trunks.actions.executor import execute_once_async
+from trunks.repository import Repository
+from trunks.storage import Storage
 
 
 def _real_git() -> str:
@@ -197,6 +203,38 @@ class RealGitRoundTripTest(unittest.TestCase):
             trigger_prefix = f"refs/actions/repos/myrepo/triggers/push/{sha}"
             self.assertIsNotNone(_sqlite_ref(primary_db, "myrepo", trigger_prefix))
             self.assertIsNotNone(_sqlite_ref(mirror_db, "myrepo", trigger_prefix))
+
+    def test_git_push_queues_local_workflow_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "storage.db"
+            env, _ = _setup_helper_env(tmp_path, db_path)
+            env["TRUNKS_ACTIONS_DISABLE_AUTO_EXECUTOR"] = "1"
+
+            src = tmp_path / "src"
+            sha = _make_repo(
+                src,
+                files={
+                    "README.md": b"hello\n",
+                    ".trunks/workflows/ci.yml": b"name: CI\non: [push]\njobs:\n  build:\n    steps:\n      - run: printf pushed\n",
+                },
+            )
+            repo = Repository.init(src, name="myrepo")
+            repo.set_storage_profile(Storage.from_url(name="test", role="primary", url=f"sqlite://{db_path}#{{repo}}"))
+            _git(src, "remote", "add", "origin", "trunks://test/myrepo")
+
+            push = _git(src, "push", "-u", "origin", "main", env=env, check=False)
+
+            self.assertEqual(push.returncode, 0, f"push failed: {push.stderr}")
+            runs = list_workflow_runs(repo)
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(runs[0]["phase"], "pending")
+            self.assertEqual(runs[0]["commit"], sha)
+            result = asyncio.run(execute_once_async(repo, executor="test-executor", cwd=str(src)))
+            self.assertIsNotNone(result)
+            runs = list_workflow_runs(repo)
+            self.assertEqual(runs[0]["phase"], "succeeded")
+            self.assertEqual(runs[0]["jobs"][0]["phase"], "succeeded")
 
     def test_non_fast_forward_push_is_rejected_by_git(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
