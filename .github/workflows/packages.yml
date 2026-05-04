@@ -41,6 +41,18 @@ jobs:
           mkdir -p /tmp/trunks-python-sdist
           tar -xzf dist/trunks_python-*.tar.gz -C /tmp/trunks-python-sdist --strip-components=1
           (cd /tmp/trunks-python-sdist && python -m build --wheel)
+      - name: Publish trunks to PyPI
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
+      - name: Publish trunks-python to PyPI
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload trunks-python/dist/*
 
   node-package:
     name: Node package metadata
@@ -70,4 +82,10 @@ jobs:
         run: |
           npm run pack:dry
           npm run publish:dry
+        working-directory: trunks-node
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
         working-directory: trunks-node
