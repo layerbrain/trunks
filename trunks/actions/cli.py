@@ -17,7 +17,7 @@ from .backend_store import repo_root, store
 from .capacity import capacity_snapshot, set_capacity_limit
 from .health import provider_health_snapshot
 from .oidc import mint_oidc_token
-from .run import enqueue_command, run_command
+from .run import DEFAULT_CPU, DEFAULT_DISK_GIB, DEFAULT_MEMORY_GIB, enqueue_command, run_command
 from .secrets import bind_secret, list_secret_bindings, remove_secret_binding, show_secret_binding
 from .storage import cancel_run, list_runs, load_run, prune_runs, repair_indexes
 from .watch import watch_run
@@ -573,9 +573,9 @@ def _spec_from_args(args: argparse.Namespace) -> Spec | None:
         return None
     gpu = GPU(kind=args.gpu, count=args.gpu_count) if args.gpu else None
     return Spec(
-        cpu=args.cpu or 1,
-        memory_gib=args.memory or 1,
-        disk_gib=args.disk or 1,
+        cpu=args.cpu or DEFAULT_CPU,
+        memory_gib=args.memory or DEFAULT_MEMORY_GIB,
+        disk_gib=args.disk or DEFAULT_DISK_GIB,
         arch=args.arch or _host_arch(),
         gpu=gpu,
         network=args.network or "default",

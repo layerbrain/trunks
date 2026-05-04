@@ -25,6 +25,20 @@ from .storage import persist_run
 from .status_writeback import github_checks_writeback_from_env_async
 
 
+DEFAULT_CPU = 2
+DEFAULT_MEMORY_GIB = 7
+DEFAULT_DISK_GIB = 14
+
+
+def _default_spec() -> Spec:
+    return Spec(
+        cpu=DEFAULT_CPU,
+        memory_gib=DEFAULT_MEMORY_GIB,
+        disk_gib=DEFAULT_DISK_GIB,
+        arch=_host_arch(),
+    )
+
+
 def run_command(
     command: str | list[str],
     *,
@@ -80,7 +94,7 @@ async def run_command_async(
     run_env = dict(secret_env)
     run_env.update(env or {})
     log_mask_env = masking_env(secret_env, env)
-    resolved_spec = spec or Spec(cpu=1, memory_gib=1, disk_gib=1, arch=_host_arch())
+    resolved_spec = spec or _default_spec()
     registry = await ProviderRegistry.discover()
     provider = await registry.resolve(
         capabilities=_capabilities_for_isolation(isolation),
@@ -204,7 +218,7 @@ def enqueue_command(
     isolation: Isolation = "process",
 ) -> Run:
     _ensure_commit_closure(repo, commit)
-    resolved_spec = spec or Spec(cpu=1, memory_gib=1, disk_gib=1, arch=_host_arch())
+    resolved_spec = spec or _default_spec()
     run = ulid()
     action_run = Run(
         id=run,

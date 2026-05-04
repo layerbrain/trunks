@@ -22,7 +22,23 @@ from .backend_store import (
     workflow_run_job_ref,
     workflow_run_state_ref,
 )
-from .run import run_command_async
+from .run import DEFAULT_CPU, DEFAULT_DISK_GIB, DEFAULT_MEMORY_GIB, run_command_async
+
+
+_RUNS_ON_PRESETS: dict[str, dict[str, object]] = {
+    "ubuntu-latest": {},
+    "ubuntu-24.04": {},
+    "ubuntu-22.04": {},
+    "ubuntu-20.04": {},
+    "ubuntu-large": {"cpu": 4, "memory_gib": 16, "disk_gib": 150},
+    "ubuntu-latest-4-cores": {"cpu": 4, "memory_gib": 16, "disk_gib": 150},
+    "ubuntu-latest-8-cores": {"cpu": 8, "memory_gib": 32, "disk_gib": 300},
+    "ubuntu-latest-16-cores": {"cpu": 16, "memory_gib": 64, "disk_gib": 600},
+    "ubuntu-latest-32-cores": {"cpu": 32, "memory_gib": 128, "disk_gib": 1200},
+    "gpu-h100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "H100_80GB", "count": 1}},
+    "gpu-a100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "A100_80GB", "count": 1}},
+    "gpu-l40s": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "L40S_48GB", "count": 1}},
+}
 
 WORKFLOW_SCHEMA = "trunks.actions.workflow.v1"
 WORKFLOW_RUN_SCHEMA = "trunks.actions.workflow_run.v1"
@@ -338,23 +354,56 @@ def _parse_needs(raw: object) -> tuple[str, ...]:
 
 
 def _parse_spec(raw: dict[object, object]) -> Spec:
+    base = _runs_on_preset(raw.get("runs-on"))
     trunks = raw.get("trunks")
-    spec_raw = trunks.get("spec") if isinstance(trunks, dict) else None
-    if not isinstance(spec_raw, dict):
-        return Spec(cpu=1, memory_gib=1, disk_gib=1, arch=_host_arch())
-    gpu_raw = spec_raw.get("gpu")
+    override = trunks.get("spec") if isinstance(trunks, dict) else None
+    override = override if isinstance(override, dict) else {}
+
+    def pick(*keys: str) -> object:
+        for source in (override, base):
+            for key in keys:
+                if key in source:
+                    return source[key]
+        return None
+
+    cpu_raw = pick("cpu")
+    memory_raw = pick("memory_gib", "memory")
+    disk_raw = pick("disk_gib", "disk")
+    arch_raw = pick("arch")
+    network_raw = pick("network")
+    gpu_raw = pick("gpu")
     try:
-        gpu = GPU(kind=str(gpu_raw.get("kind", gpu_raw.get("type", ""))), count=int(gpu_raw.get("count", 1))) if isinstance(gpu_raw, dict) else None
+        if isinstance(gpu_raw, dict) and (gpu_raw.get("kind") or gpu_raw.get("type")):
+            gpu = GPU(
+                kind=str(gpu_raw.get("kind") or gpu_raw.get("type")),
+                count=int(gpu_raw.get("count", 1)),
+            )
+        else:
+            gpu = None
         return Spec(
-            cpu=int(spec_raw.get("cpu", 1)),
-            memory_gib=int(spec_raw.get("memory_gib", spec_raw.get("memory", 1))),
-            disk_gib=int(spec_raw.get("disk_gib", spec_raw.get("disk", 1))),
-            arch=str(spec_raw.get("arch", _host_arch())),  # type: ignore[arg-type]
+            cpu=int(cpu_raw) if cpu_raw is not None else DEFAULT_CPU,
+            memory_gib=int(memory_raw) if memory_raw is not None else DEFAULT_MEMORY_GIB,
+            disk_gib=int(disk_raw) if disk_raw is not None else DEFAULT_DISK_GIB,
+            arch=str(arch_raw) if arch_raw else _host_arch(),  # type: ignore[arg-type]
             gpu=gpu,
-            network=str(spec_raw.get("network", "default")),  # type: ignore[arg-type]
+            network=str(network_raw) if network_raw else "default",  # type: ignore[arg-type]
         )
     except (TypeError, ValueError) as exc:
         raise WorkflowError(f"invalid trunks.spec: {exc}") from exc
+
+
+def _runs_on_preset(raw: object) -> dict[str, object]:
+    if isinstance(raw, str):
+        labels: tuple[str, ...] = (raw,)
+    elif isinstance(raw, list):
+        labels = tuple(item for item in raw if isinstance(item, str))
+    else:
+        return {}
+    for label in labels:
+        preset = _RUNS_ON_PRESETS.get(label.strip())
+        if preset is not None:
+            return dict(preset)
+    return {}
 
 
 def _parse_matrix(raw: dict[object, object]) -> tuple[dict[str, object], ...]:
