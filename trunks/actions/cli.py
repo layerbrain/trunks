@@ -559,7 +559,7 @@ async def dispatch(argv: list[str]) -> int:
                     if not isinstance(wr, dict):
                         continue
                     wid = str(wr.get("id", ""))[:38]
-                    status = str(wr.get("status", "unknown"))
+                    status = str(wr.get("phase", wr.get("status", "unknown")))
                     name = str(wr.get("workflow", {}).get("name", "") if isinstance(wr.get("workflow"), dict) else wr.get("name", ""))[:18]
                     jobs = wr.get("jobs", [])
                     job_count = len(jobs) if isinstance(jobs, list) else 0
@@ -572,7 +572,10 @@ async def dispatch(argv: list[str]) -> int:
                 for job in data:
                     if not isinstance(job, dict):
                         continue
-                    _print_run_summary(job)
+                    run = str(job.get("run", ""))
+                    phase = str(job.get("phase", "unknown"))
+                    job_name = str(job.get("job", job.get("name", "")))
+                    print(f"{run} {phase} job={job_name}")
         elif obj == "workflow_run_graph":
             data = payload.get("data", [])
             if not data:
@@ -652,7 +655,7 @@ def _print_run_summary(run: dict[str, object]) -> None:
 
 def _print_workflow_run_summary(wr: dict[str, object]) -> None:
     wid = str(wr.get("id", ""))
-    status = str(wr.get("status", "unknown"))
+    status = str(wr.get("phase", wr.get("status", "unknown")))
     workflow = wr.get("workflow")
     name = str(workflow.get("name", "")) if isinstance(workflow, dict) else str(wr.get("name", ""))
     jobs = wr.get("jobs", [])
@@ -661,7 +664,10 @@ def _print_workflow_run_summary(wr: dict[str, object]) -> None:
     if isinstance(jobs, list):
         for job in jobs:
             if isinstance(job, dict):
-                _print_run_summary(job)
+                run = str(job.get("run", ""))
+                phase = str(job.get("phase", "unknown"))
+                job_name = str(job.get("job", job.get("name", "")))
+                print(f"{run} {phase} job={job_name}")
 
 
 def _spec_from_args(args: argparse.Namespace) -> Spec | None:

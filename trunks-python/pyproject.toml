@@ -1,12 +1,12 @@
 [project]
 name = "trunks-python"
-version = "1.2.13"
+version = "1.2.14"
 description = "Git repos backed by your own storage. Push to S3, R2, Tigris, MinIO, Postgres, SFTP, NFS, or local disk."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Brain", email = "brain@layerbrain.com" }]
-dependencies = ["trunks==1.2.13"]
+dependencies = ["trunks==1.2.14"]
 
 [build-system]
 requires = ["hatchling>=1.18,<1.27"]
