@@ -1,12 +1,13 @@
 # Daytona + S3-Compatible Storage
 
-This example runs a Trunks Actions job on Daytona and stores the run state,
-logs, and artifacts in S3-compatible storage. Use MinIO locally for a demo, or
-replace it with S3, R2, Tigris, Spaces, Ceph, or another compatible backend.
+This example shows Trunks Actions running CI from a normal `git push`.
 
-The job itself can be any shell command. The example below boots a small web app,
-sends traffic to it, writes `report.json`, uploads `logs/app.log`, and destroys
-the sandbox.
+You add storage, add a sandbox provider, commit a workflow under
+`.trunks/workflows`, and push. Trunks handles the workflow run without GitHub
+Actions and without a central CI server.
+
+Use MinIO locally for the demo, or replace it with S3, R2, Tigris, Spaces, Ceph,
+or another S3-compatible backend.
 
 ## 1. Start MinIO Locally
 
@@ -45,8 +46,7 @@ trunks storage add \
   --endpoint http://127.0.0.1:9000 \
   --region us-east-1 \
   --access-key minioadmin \
-  --secret-key minioadmin \
-  --json
+  --secret-key minioadmin
 
 trunks storage ping --name minio
 ```
@@ -54,7 +54,7 @@ trunks storage ping --name minio
 Expected result:
 
 ```text
-minio      ok      s3://trunks-demo/trunks/<repo>.trunk
+minio ok
 ```
 
 For a hosted S3-compatible backend, keep the same command shape and change
@@ -68,13 +68,40 @@ trunks sandboxes providers add \
   --type daytona \
   --secret api_key=<daytona-api-key>
 
-trunks sandboxes providers test --name daytona --live --json
+trunks sandboxes providers test --name daytona --live
 ```
 
 Provider credentials are stored in local Trunks config. They are not written to
 the repo.
 
-## 4. Add A Demo Job
+## 4. Add The CI Files
+
+Create `.trunks/workflows/live-demo.yml`:
+
+```yaml
+name: live-demo
+on: [push, workflow_dispatch]
+
+jobs:
+  hello-trunks-ci:
+    runs-on: ubuntu-latest
+    env:
+      PORT: "8080"
+      DURATION_S: "60"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: boot app + smoke
+        run: bash scripts/run-preview.sh
+
+      - name: upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: latency-report
+          path: |
+            report.json
+            logs/app.log
+```
 
 Create `scripts/smoke.py`:
 
@@ -161,49 +188,52 @@ done
 python3 scripts/smoke.py
 ```
 
-## 5. Run On Daytona
+## 5. Commit And Push
+
+Use Git normally:
 
 ```bash
-trunks actions run \
-  --command 'bash scripts/run-preview.sh' \
-  --provider daytona \
-  --strict-provider \
-  --isolation container \
-  --arch x86_64 \
-  --cpu 2 \
-  --memory 4gb \
-  --disk 8gb \
-  --timeout 240 \
-  --artifact report.json \
-  --artifact logs/app.log \
-  --json
+git add .trunks/workflows/live-demo.yml scripts
+git commit -m "Add Trunks CI"
+git push
 ```
 
-The command returns a JSON payload with an `id`. If you missed it:
-
-```bash
-trunks actions list --limit 5
-```
+Trunks sees the push, creates the workflow run, routes the job to Daytona, writes
+state to storage, uploads artifacts, and destroys the sandbox.
 
 ## 6. Watch Logs And Download Artifacts
 
+Find the workflow run:
+
 ```bash
-trunks actions watch --id <run-id>
-trunks actions logs --id <run-id>
-trunks actions artifacts --id <run-id>
+trunks actions workflow-runs --limit 5
+```
+
+Find the job run id:
+
+```bash
+trunks actions workflow-runs --id <workflow-run-id> jobs
+```
+
+Watch logs and inspect artifacts:
+
+```bash
+trunks actions watch --id <job-run-id>
+trunks actions logs --id <job-run-id>
+trunks actions artifacts --id <job-run-id>
 ```
 
 Download the latency report:
 
 ```bash
-trunks actions artifacts --id <run-id> get report.json -o report.json
+trunks actions artifacts --id <job-run-id> get report.json -o report.json
 cat report.json
 ```
 
 Download the app log:
 
 ```bash
-trunks actions artifacts --id <run-id> get logs/app.log -o app.log
+trunks actions artifacts --id <job-run-id> get logs/app.log -o app.log
 ```
 
 ## 7. Show The Storage Layout
@@ -222,10 +252,11 @@ trunks-demo/
 Important paths:
 
 ```text
-refs/actions/repos/<repo>/runs/<run-id>/state
-refs/actions/repos/<repo>/runs/<run-id>/logs/1/
-refs/actions/repos/<repo>/runs/<run-id>/artifacts/report.json
-refs/actions/repos/<repo>/runs/<run-id>/artifacts/logs/app.log
+refs/actions/repos/<repo>/workflow-runs/<workflow-run-id>/state
+refs/actions/repos/<repo>/runs/<job-run-id>/state
+refs/actions/repos/<repo>/runs/<job-run-id>/logs/1/
+refs/actions/repos/<repo>/runs/<job-run-id>/artifacts/report.json
+refs/actions/repos/<repo>/runs/<job-run-id>/artifacts/logs/app.log
 objects/<sha-prefix>/<sha>
 ```
 
@@ -233,7 +264,7 @@ Artifacts are Trunks objects. The artifact refs point at immutable object ids.
 Users retrieve them through Trunks:
 
 ```bash
-trunks actions artifacts --id <run-id> get report.json -o report.json
+trunks actions artifacts --id <job-run-id> get report.json -o report.json
 ```
 
 If an artifact ref exists but the object was deleted or corrupted, retrieval
@@ -252,4 +283,24 @@ Stop local MinIO:
 
 ```bash
 docker rm -f trunks-demo-minio
+```
+
+## Manual Debug Command
+
+Normal CI starts from `git push`. Use the direct command only when debugging one
+job without a workflow trigger:
+
+```bash
+trunks actions run \
+  --command 'bash scripts/run-preview.sh' \
+  --provider daytona \
+  --strict-provider \
+  --isolation container \
+  --arch x86_64 \
+  --cpu 2 \
+  --memory 4gb \
+  --disk 8gb \
+  --timeout 240 \
+  --artifact report.json \
+  --artifact logs/app.log
 ```

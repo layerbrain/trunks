@@ -204,7 +204,7 @@ class DaytonaProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(checks["api_url"], "https://api.test")
         self.assertEqual(checks["toolbox_url"], "https://toolbox.test")
         self.assertEqual(checks["catalog_source"], "bundled")
-        self.assertEqual(checks["catalog_size"], 1)
+        self.assertEqual(checks["catalog_size"], 2)
 
 
 if __name__ == "__main__":

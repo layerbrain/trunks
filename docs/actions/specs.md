@@ -4,22 +4,24 @@ A `Spec` describes the compute a job needs: CPU, memory, disk, architecture, GPU
 
 ## Defaults
 
-A job with no `runs-on` and no `trunks.spec` runs with the same shape as a GitHub-hosted `ubuntu-latest` runner: 2 vCPU, 7 GiB RAM, 14 GiB disk, host architecture, no GPU, default network.
+A job with no `runs-on` and no `trunks.spec` runs as a local host-shaped process: 2 vCPU, 7 GiB RAM, 14 GiB disk, host architecture, no GPU, default network.
+
+A job with `runs-on: ubuntu-latest` uses the GitHub-hosted shape: 2 vCPU, 7 GiB RAM, 14 GiB disk, x86_64, Linux container isolation.
 
 ## `runs-on` presets
 
 Putting `runs-on:` on a job picks a preset.
 
-| Label | CPU | Memory (GiB) | Disk (GiB) | GPU |
-|---|---|---|---|---|
-| `ubuntu-latest`, `ubuntu-24.04`, `ubuntu-22.04`, `ubuntu-20.04` | 2 | 7 | 14 | — |
-| `ubuntu-large`, `ubuntu-latest-4-cores` | 4 | 16 | 150 | — |
-| `ubuntu-latest-8-cores` | 8 | 32 | 300 | — |
-| `ubuntu-latest-16-cores` | 16 | 64 | 600 | — |
-| `ubuntu-latest-32-cores` | 32 | 128 | 1200 | — |
-| `gpu-h100` | 8 | 32 | 100 | 1 × H100 80GB |
-| `gpu-a100` | 8 | 32 | 100 | 1 × A100 80GB |
-| `gpu-l40s` | 8 | 32 | 100 | 1 × L40S 48GB |
+| Label | CPU | Memory (GiB) | Disk (GiB) | Arch | Isolation | GPU |
+|---|---|---|---|---|---|---|
+| `ubuntu-latest`, `ubuntu-24.04`, `ubuntu-22.04`, `ubuntu-20.04` | 2 | 7 | 14 | x86_64 | container | — |
+| `ubuntu-large`, `ubuntu-latest-4-cores` | 4 | 16 | 150 | x86_64 | container | — |
+| `ubuntu-latest-8-cores` | 8 | 32 | 300 | x86_64 | container | — |
+| `ubuntu-latest-16-cores` | 16 | 64 | 600 | x86_64 | container | — |
+| `ubuntu-latest-32-cores` | 32 | 128 | 1200 | x86_64 | container | — |
+| `gpu-h100` | 8 | 32 | 100 | x86_64 | container | 1 × H100 80GB |
+| `gpu-a100` | 8 | 32 | 100 | x86_64 | container | 1 × A100 80GB |
+| `gpu-l40s` | 8 | 32 | 100 | x86_64 | container | 1 × L40S 48GB |
 
 Unknown labels fall back to the default. List form is supported: the first known label wins.
 

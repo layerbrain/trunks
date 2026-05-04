@@ -13,7 +13,7 @@ import yaml
 from trunks.ids import ulid
 from trunks.objects import Blob
 from trunks.repository import Repository
-from trunks.sandboxes import GPU, Spec
+from trunks.sandboxes import GPU, Isolation, Spec
 
 from .backend_store import (
     store,
@@ -26,18 +26,18 @@ from .run import DEFAULT_CPU, DEFAULT_DISK_GIB, DEFAULT_MEMORY_GIB, run_command_
 
 
 _RUNS_ON_PRESETS: dict[str, dict[str, object]] = {
-    "ubuntu-latest": {},
-    "ubuntu-24.04": {},
-    "ubuntu-22.04": {},
-    "ubuntu-20.04": {},
-    "ubuntu-large": {"cpu": 4, "memory_gib": 16, "disk_gib": 150},
-    "ubuntu-latest-4-cores": {"cpu": 4, "memory_gib": 16, "disk_gib": 150},
-    "ubuntu-latest-8-cores": {"cpu": 8, "memory_gib": 32, "disk_gib": 300},
-    "ubuntu-latest-16-cores": {"cpu": 16, "memory_gib": 64, "disk_gib": 600},
-    "ubuntu-latest-32-cores": {"cpu": 32, "memory_gib": 128, "disk_gib": 1200},
-    "gpu-h100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "H100_80GB", "count": 1}},
-    "gpu-a100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "A100_80GB", "count": 1}},
-    "gpu-l40s": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "gpu": {"kind": "L40S_48GB", "count": 1}},
+    "ubuntu-latest": {"arch": "x86_64"},
+    "ubuntu-24.04": {"arch": "x86_64"},
+    "ubuntu-22.04": {"arch": "x86_64"},
+    "ubuntu-20.04": {"arch": "x86_64"},
+    "ubuntu-large": {"cpu": 4, "memory_gib": 16, "disk_gib": 150, "arch": "x86_64"},
+    "ubuntu-latest-4-cores": {"cpu": 4, "memory_gib": 16, "disk_gib": 150, "arch": "x86_64"},
+    "ubuntu-latest-8-cores": {"cpu": 8, "memory_gib": 32, "disk_gib": 300, "arch": "x86_64"},
+    "ubuntu-latest-16-cores": {"cpu": 16, "memory_gib": 64, "disk_gib": 600, "arch": "x86_64"},
+    "ubuntu-latest-32-cores": {"cpu": 32, "memory_gib": 128, "disk_gib": 1200, "arch": "x86_64"},
+    "gpu-h100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "arch": "x86_64", "gpu": {"kind": "H100_80GB", "count": 1}},
+    "gpu-a100": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "arch": "x86_64", "gpu": {"kind": "A100_80GB", "count": 1}},
+    "gpu-l40s": {"cpu": 8, "memory_gib": 32, "disk_gib": 100, "arch": "x86_64", "gpu": {"kind": "L40S_48GB", "count": 1}},
 }
 
 WORKFLOW_SCHEMA = "trunks.actions.workflow.v1"
@@ -66,6 +66,11 @@ class WorkflowJob:
     needs: tuple[str, ...]
     steps: tuple[WorkflowStep, ...]
     spec: Spec
+    provider_id: str | None
+    strict_provider: bool
+    region: str | None
+    isolation: Isolation
+    timeout_s: int
     matrix: tuple[dict[str, object], ...]
 
 
@@ -89,6 +94,11 @@ class Workflow:
                     "name": job.name,
                     "needs": list(job.needs),
                     "spec": asdict(job.spec),
+                    "provider_id": job.provider_id,
+                    "strict_provider": job.strict_provider,
+                    "region": job.region,
+                    "isolation": job.isolation,
+                    "timeout_s": job.timeout_s,
                     "matrix": list(job.matrix),
                     "steps": [asdict(step) for step in job.steps],
                 }
@@ -186,6 +196,11 @@ async def run_workflow(
                     commit=commit,
                     cwd=str(root),
                     spec=job.spec,
+                    provider_id=job.provider_id,
+                    strict_provider=job.strict_provider,
+                    region=job.region,
+                    isolation=job.isolation,
+                    timeout_s=job.timeout_s,
                     artifact_paths=_job_artifacts(job, variables),
                 )
                 payload = run.to_dict()
@@ -300,6 +315,8 @@ def _parse_job(job_id: str, raw: object, *, path: Path, accept_best_effort: bool
     steps_raw = raw.get("steps")
     if not isinstance(steps_raw, list) or not steps_raw:
         raise WorkflowError(f"{path}: jobs.{job_id}.steps must be a non-empty list")
+    trunks = raw.get("trunks")
+    trunks = trunks if isinstance(trunks, dict) else {}
     steps = tuple(_parse_step(job_id, index, step, path=path, accept_best_effort=accept_best_effort) for index, step in enumerate(steps_raw))
     return WorkflowJob(
         id=job_id,
@@ -307,6 +324,11 @@ def _parse_job(job_id: str, raw: object, *, path: Path, accept_best_effort: bool
         needs=_parse_needs(raw.get("needs")),
         steps=steps,
         spec=_parse_spec(raw),
+        provider_id=_optional_string(trunks.get("provider")),
+        strict_provider=_bool_value(trunks.get("strict_provider", trunks.get("strict-provider")), default=False),
+        region=_optional_string(trunks.get("region")),
+        isolation=_parse_isolation(trunks.get("isolation"), raw.get("runs-on"), path=path, job_id=job_id),
+        timeout_s=_parse_timeout(raw, trunks, path=path, job_id=job_id),
         matrix=_parse_matrix(raw),
     )
 
@@ -353,6 +375,60 @@ def _parse_needs(raw: object) -> tuple[str, ...]:
     raise WorkflowError("needs must be a string or list of strings")
 
 
+def _optional_string(raw: object) -> str | None:
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    return value or None
+
+
+def _bool_value(raw: object, *, default: bool) -> bool:
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        value = raw.strip().lower()
+        if value in {"1", "true", "yes", "on"}:
+            return True
+        if value in {"0", "false", "no", "off"}:
+            return False
+    raise WorkflowError(f"invalid boolean value {raw!r}")
+
+
+def _parse_isolation(raw: object, runs_on: object, *, path: Path, job_id: str) -> Isolation:
+    value = str(raw or _default_isolation_for_runs_on(runs_on))
+    if value not in {"process", "container", "microvm", "vm"}:
+        raise WorkflowError(f"{path}: jobs.{job_id}.trunks.isolation must be process, container, microvm, or vm")
+    return value  # type: ignore[return-value]
+
+
+def _default_isolation_for_runs_on(raw: object) -> Isolation:
+    labels = _runs_on_labels(raw)
+    if any(label.startswith("ubuntu") or label.startswith("gpu-") for label in labels):
+        return "container"
+    return "process"
+
+
+def _parse_timeout(raw: dict[object, object], trunks: dict[object, object], *, path: Path, job_id: str) -> int:
+    value = trunks.get("timeout_s", trunks.get("timeout"))
+    if value is None:
+        value = raw.get("timeout-minutes")
+        if value is not None:
+            try:
+                return int(value) * 60
+            except (TypeError, ValueError) as exc:
+                raise WorkflowError(f"{path}: jobs.{job_id}.timeout-minutes must be an integer") from exc
+        return 30 * 60
+    try:
+        timeout_s = int(value)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowError(f"{path}: jobs.{job_id}.trunks.timeout must be seconds as an integer") from exc
+    if timeout_s <= 0:
+        raise WorkflowError(f"{path}: jobs.{job_id}.trunks.timeout must be greater than zero")
+    return timeout_s
+
+
 def _parse_spec(raw: dict[object, object]) -> Spec:
     base = _runs_on_preset(raw.get("runs-on"))
     trunks = raw.get("trunks")
@@ -393,17 +469,19 @@ def _parse_spec(raw: dict[object, object]) -> Spec:
 
 
 def _runs_on_preset(raw: object) -> dict[str, object]:
-    if isinstance(raw, str):
-        labels: tuple[str, ...] = (raw,)
-    elif isinstance(raw, list):
-        labels = tuple(item for item in raw if isinstance(item, str))
-    else:
-        return {}
-    for label in labels:
+    for label in _runs_on_labels(raw):
         preset = _RUNS_ON_PRESETS.get(label.strip())
         if preset is not None:
             return dict(preset)
     return {}
+
+
+def _runs_on_labels(raw: object) -> tuple[str, ...]:
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, list):
+        return tuple(item for item in raw if isinstance(item, str))
+    return ()
 
 
 def _parse_matrix(raw: dict[object, object]) -> tuple[dict[str, object], ...]:
@@ -477,7 +555,10 @@ def _job_artifacts(job: WorkflowJob, variables: dict[str, object]) -> tuple[str,
         if step.uses and step.uses.startswith("actions/upload-artifact@"):
             path = step.with_args.get("path")
             if path:
-                paths.append(_apply_expressions(path, variables, {}))
+                for item in _apply_expressions(path, variables, {}).splitlines():
+                    item = item.strip()
+                    if item:
+                        paths.append(item)
     return tuple(paths)
 
 

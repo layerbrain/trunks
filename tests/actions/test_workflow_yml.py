@@ -8,7 +8,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from trunks.actions.artifacts import list_artifacts
 from trunks.actions.workflow import WorkflowError, lint_workflows, parse_workflow
+from trunks.actions.workflow import workflow_run_jobs
 from trunks.cli import dispatch
 from trunks.repository import Repository
 
@@ -83,6 +85,44 @@ jobs:
                 self.assertEqual(code, 0)
                 shown = json.loads(show_out.getvalue())
                 self.assertEqual(shown["name"], "CI")
+            finally:
+                os.chdir(cwd)
+
+    async def test_upload_artifact_multiline_path_collects_each_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflow_dir = root / ".trunks" / "workflows"
+            workflow_dir.mkdir(parents=True)
+            (workflow_dir / "ci.yml").write_text(
+                """
+name: CI
+on: [workflow_dispatch]
+jobs:
+  test:
+    steps:
+      - run: mkdir -p logs && printf report > report.json && printf log > logs/app.log
+      - uses: actions/upload-artifact@v4
+        with:
+          path: |
+            report.json
+            logs/app.log
+""".strip(),
+                encoding="utf-8",
+            )
+            cwd = Path.cwd()
+            os.chdir(root)
+            try:
+                repo = Repository.init(name="demo")
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    code = await dispatch(["actions", "run", "--json"])
+                self.assertEqual(code, 0)
+                payload = json.loads(out.getvalue())
+                job_run_id = workflow_run_jobs(repo, payload["id"])[0]["run"]
+                self.assertEqual(
+                    [item["name"] for item in list_artifacts(repo, job_run_id)],
+                    ["logs/app.log", "report.json"],
+                )
             finally:
                 os.chdir(cwd)
 
