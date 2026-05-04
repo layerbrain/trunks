@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         return _passthrough(argv)
     try:
         repo = Repository.find()
-    except RepositoryNotFound:
+    except (RepositoryNotFound, OSError):
         return _passthrough(argv)
 
     leading, argv = _split_global_options(argv)
